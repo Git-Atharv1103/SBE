@@ -1,0 +1,315 @@
+{
+  "categories": [
+    {
+      "_id": "mrowtzmbsifh6",
+      "categoryName": "Pipes"
+    },
+    {
+      "_id": "mrowtzmd4y9j3",
+      "categoryName": "Angles"
+    },
+    {
+      "_id": "mrowtzmggusg3",
+      "categoryName": "Channels"
+    },
+    {
+      "_id": "mrowtzmifn8aj",
+      "categoryName": "Plates"
+    },
+    {
+      "_id": "mrowtzmk1whx5",
+      "categoryName": "Round Bar"
+    },
+    {
+      "_id": "mrowtzmmemv5c",
+      "categoryName": "Flat Bar"
+    },
+    {
+      "_id": "mrowtzmpgmf65",
+      "categoryName": "Fasteners"
+    },
+    {
+      "_id": "mrowtzmrc9cil",
+      "categoryName": "Paint"
+    },
+    {
+      "_id": "mrowtzmsbej6d",
+      "categoryName": "Hardware"
+    },
+    {
+      "_id": "mrowtzmu6y7ol",
+      "categoryName": "Other"
+    },
+    {
+      "_id": "mroxrh0jx9eaj",
+      "categoryName": "wwwww"
+    },
+    {
+      "_id": "mroxse96j99u6",
+      "categoryName": "Structural Steel"
+    }
+  ],
+  "materials": [
+    {
+      "_id": "mrowtzmyhdo1s",
+      "createdAt": "2026-07-17T12:24:28.330Z",
+      "status": "Active",
+      "materialName": "MS Pipe 25x25",
+      "categoryId": "mrowtzmbsifh6",
+      "unit": "Kg",
+      "price": 82,
+      "description": "Mild Steel Square Pipe 25x25mm"
+    },
+    {
+      "_id": "mrowtzmzswin2",
+      "createdAt": "2026-07-17T12:24:28.331Z",
+      "status": "Active",
+      "materialName": "MS Pipe 40x40",
+      "categoryId": "mrowtzmbsifh6",
+      "unit": "Kg",
+      "price": 94,
+      "description": "Mild Steel Square Pipe 40x40mm"
+    },
+    {
+      "_id": "mrowtzn2kpqkh",
+      "createdAt": "2026-07-17T12:24:28.334Z",
+      "status": "Active",
+      "materialName": "MS Plate 5mm",
+      "categoryId": "mrowtzmifn8aj",
+      "unit": "Sheet",
+      "price": 2800,
+      "description": "Mild Steel Plate 5mm Thickness"
+    },
+    {
+      "_id": "mrowtzn4lyvzt",
+      "createdAt": "2026-07-17T12:24:28.336Z",
+      "status": "Active",
+      "materialName": "MS Angle",
+      "categoryId": "mrowtzmd4y9j3",
+      "unit": "Kg",
+      "price": 76,
+      "description": "Mild Steel Angle Section"
+    },
+    {
+      "_id": "mrowtzn6xp59v",
+      "createdAt": "2026-07-17T12:24:28.338Z",
+      "status": "Active",
+      "materialName": "GI Pipe",
+      "categoryId": "mrowtzmbsifh6",
+      "unit": "Kg",
+      "price": 110,
+      "description": "Galvanized Iron Pipe"
+    },
+    {
+      "_id": "mrowtzn8pj6lr",
+      "createdAt": "2026-07-17T12:24:28.340Z",
+      "status": "Active",
+      "materialName": "Stainless Steel Bolt M10",
+      "categoryId": "mrowtzmpgmf65",
+      "unit": "Piece",
+      "price": 15,
+      "description": "SS Bolt M10 x 50mm"
+    },
+    {
+      "_id": "mrowtzn9s1e8s",
+      "createdAt": "2026-07-17T12:24:28.341Z",
+      "status": "Active",
+      "materialName": "Red Oxide Primer",
+      "categoryId": "mrowtzmrc9cil",
+      "unit": "Meter",
+      "price": 180,
+      "description": "Anti-rust primer paint per liter/meter area"
+    },
+    {
+      "_id": "mrowtznb6716a",
+      "createdAt": "2026-07-17T12:24:28.343Z",
+      "status": "Active",
+      "materialName": "Welding Rods",
+      "categoryId": "mrowtzmsbej6d",
+      "unit": "Piece",
+      "price": 8,
+      "description": "Welding electrode"
+    },
+    {
+      "_id": "mroxp0fmvi62q",
+      "createdAt": "2026-07-17T12:48:35.698Z",
+      "status": "Active",
+      "materialName": "demo1",
+      "categoryId": "mrowtzmifn8aj",
+      "unit": "Kg",
+      "price": 11,
+      "description": "111"
+    }
+  ],
+  "customers": [
+    {
+      "_id": "mrowtznfiq15x",
+      "customerName": "ABC Fabrication & Erectors",
+      "phone": "9876543210",
+      "address": "123 Industrial Area, Phase 1, Mumbai",
+      "email": "contact@abcfab.com"
+    },
+    {
+      "_id": "mrowtznhvezga",
+      "customerName": "Apex Engineering Ltd",
+      "phone": "9123456789",
+      "address": "45 Technology Park, Pune, Maharashtra",
+      "email": "procurement@apexeng.co"
+    },
+    {
+      "_id": "mrowtznk22o2m",
+      "customerName": "Sai Steel Works",
+      "phone": "9988776655",
+      "address": "Shop No. 12, Market Road, Bangalore",
+      "email": "saisteelworks@gmail.com"
+    }
+  ],
+  "projects": [
+    {
+      "_id": "mrowtznofm34k",
+      "date": "2026-07-17T12:24:28.355Z",
+      "projectName": "Shed Extension Structure",
+      "customerId": "mrowtznfiq15x",
+      "remarks": "Heavy structural fabrication for industrial warehouse.",
+      "labourCost": 5000,
+      "transportCost": 1200,
+      "discount": 1000,
+      "gst": 18,
+      "totalAmount": 45247
+    },
+    {
+      "_id": "mrowtznqke3f3",
+      "date": "2026-06-17T12:24:28.357Z",
+      "projectName": "Main Entrance Gate",
+      "customerId": "mrowtznhvezga",
+      "remarks": "Ornate design gate with high-grade fasteners.",
+      "labourCost": 3000,
+      "transportCost": 500,
+      "discount": 200,
+      "gst": 18,
+      "totalAmount": 11470
+    },
+    {
+      "_id": "mrowtzntk1a0z",
+      "date": "2026-05-17T12:24:28.360Z",
+      "projectName": "Safety Handrails",
+      "customerId": "mrowtznk22o2m",
+      "remarks": "Safety barriers for production line floor.",
+      "labourCost": 2000,
+      "transportCost": 400,
+      "discount": 0,
+      "gst": 18,
+      "totalAmount": 12626
+    },
+    {
+      "_id": "mroxtwkt0w6qi",
+      "date": "2026-07-17",
+      "projectName": "harsh",
+      "customerId": "mrowtznfiq15x",
+      "remarks": "qwerty",
+      "labourCost": 0,
+      "transportCost": 0,
+      "discount": 0,
+      "gst": 18,
+      "totalAmount": 12370
+    }
+  ],
+  "projectMaterials": [
+    {
+      "_id": "mrowtznoea389",
+      "projectId": "mrowtznofm34k",
+      "materialId": "mrowtzmzswin2",
+      "quantity": 35,
+      "unitPrice": 94,
+      "total": 3290
+    },
+    {
+      "_id": "mrowtznobj03o",
+      "projectId": "mrowtznofm34k",
+      "materialId": "mrowtzn2kpqkh",
+      "quantity": 10,
+      "unitPrice": 2800,
+      "total": 28000
+    },
+    {
+      "_id": "mrowtznokdztm",
+      "projectId": "mrowtznofm34k",
+      "materialId": "mrowtzn4lyvzt",
+      "quantity": 15,
+      "unitPrice": 76,
+      "total": 1140
+    },
+    {
+      "_id": "mrowtznqq84az",
+      "projectId": "mrowtznqke3f3",
+      "materialId": "mrowtzmzswin2",
+      "quantity": 20,
+      "unitPrice": 94,
+      "total": 1880
+    },
+    {
+      "_id": "mrowtznqaia9m",
+      "projectId": "mrowtznqke3f3",
+      "materialId": "mrowtzn4lyvzt",
+      "quantity": 40,
+      "unitPrice": 76,
+      "total": 3040
+    },
+    {
+      "_id": "mrowtznqok6s4",
+      "projectId": "mrowtznqke3f3",
+      "materialId": "mrowtzn8pj6lr",
+      "quantity": 100,
+      "unitPrice": 15,
+      "total": 1500
+    },
+    {
+      "_id": "mrowtzntytftc",
+      "projectId": "mrowtzntk1a0z",
+      "materialId": "mrowtzn2kpqkh",
+      "quantity": 2,
+      "unitPrice": 2800,
+      "total": 5600
+    },
+    {
+      "_id": "mrowtzntjab6v",
+      "projectId": "mrowtzntk1a0z",
+      "materialId": "mrowtzn9s1e8s",
+      "quantity": 15,
+      "unitPrice": 180,
+      "total": 2700
+    },
+    {
+      "_id": "mroxtwkt1fbx3",
+      "projectId": "mroxtwkt0w6qi",
+      "materialId": "mrowtzmzswin2",
+      "quantity": 6,
+      "unitPrice": 94,
+      "total": 564
+    },
+    {
+      "_id": "mroxtwktetfrm",
+      "projectId": "mroxtwkt0w6qi",
+      "materialId": "mrowtzn6xp59v",
+      "quantity": 90,
+      "unitPrice": 110,
+      "total": 9900
+    },
+    {
+      "_id": "mroxtwktb6fwp",
+      "projectId": "mroxtwkt0w6qi",
+      "materialId": "mrowtznb6716a",
+      "quantity": 1,
+      "unitPrice": 8,
+      "total": 8
+    },
+    {
+      "_id": "mroxtwkt7bqcp",
+      "projectId": "mroxtwkt0w6qi",
+      "materialId": "mroxp0fmvi62q",
+      "quantity": 1,
+      "unitPrice": 11,
+      "total": 11
+    }
+  ]
+}
