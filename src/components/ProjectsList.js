@@ -57,11 +57,18 @@ export default function ProjectsList({ onEditProject, setActiveTab }) {
 
   const getCustomerName = (custId) => {
     const cust = customers.find(c => c._id === custId);
-    return cust ? cust.customerName : 'Unknown Customer';
+    if (cust) return cust.customerName;
+    if (custId && counterTypeOptions.includes(custId)) return custId;
+    return 'Unknown Counter Type';
   };
 
   const getCustomerDetails = (custId) => {
-    return customers.find(c => c._id === custId) || { customerName: 'Unknown', phone: '-', address: '-' };
+    const cust = customers.find(c => c._id === custId);
+    if (cust) return cust;
+    if (custId && counterTypeOptions.includes(custId)) {
+      return { customerName: custId, phone: '-', address: '-' };
+    }
+    return { customerName: 'Unknown Counter Type', phone: '-', address: '-' };
   };
 
   const getMaterialName = (matId) => {

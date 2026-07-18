@@ -12,6 +12,7 @@ import {
   User,
   AlertTriangle
 } from 'lucide-react';
+import { counterTypeOptions } from '@/lib/constants';
 
 export default function CustomerMaster() {
   const [customers, setCustomers] = useState([]);
@@ -21,8 +22,10 @@ export default function CustomerMaster() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
+
   const [formData, setFormData] = useState({
     customerName: '',
+    counterType: '',
     phone: '',
     address: '',
     email: ''
@@ -54,6 +57,7 @@ export default function CustomerMaster() {
     setEditingCustomer(null);
     setFormData({
       customerName: '',
+      counterType: '',
       phone: '',
       address: '',
       email: ''
@@ -66,6 +70,7 @@ export default function CustomerMaster() {
     setEditingCustomer(customer);
     setFormData({
       customerName: customer.customerName,
+      counterType: customer.counterType || '',
       phone: customer.phone,
       address: customer.address,
       email: customer.email || ''
@@ -77,6 +82,7 @@ export default function CustomerMaster() {
   const validateForm = () => {
     const errors = {};
     if (!formData.customerName.trim()) errors.customerName = 'Customer Name is required';
+    if (!formData.counterType.trim()) errors.counterType = 'Counter Type is required';
     if (!formData.phone.trim()) {
       errors.phone = 'Phone Number is required';
     } else if (!/^\+?[0-9\s-]{8,15}$/.test(formData.phone.trim())) {
@@ -205,7 +211,7 @@ export default function CustomerMaster() {
                       <User className="w-5 h-5 text-emerald-400" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white tracking-tight group-hover:text-emerald-400 transition-colors">{customer.customerName}</h3>
+                      <h3 className="font-bold text-white tracking-tight group-hover:text-emerald-400 transition-colors">{customer.counterType || customer.customerName}</h3>
                       <span className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Client Profile</span>
                     </div>
                   </div>
@@ -236,6 +242,10 @@ export default function CustomerMaster() {
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-slate-600 shrink-0" />
                     <span className="truncate">{customer.email || 'No email provided'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-slate-600 shrink-0" />
+                    <span className="text-slate-300">{customer.counterType || 'No counter type set'}</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
@@ -281,6 +291,26 @@ export default function CustomerMaster() {
                 />
                 {formErrors.customerName && (
                   <p className="text-red-400 text-xs mt-1.5 font-medium">{formErrors.customerName}</p>
+                )}
+              </div>
+
+              {/* Counter Type */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Counter Type *</label>
+                <select
+                  value={formData.counterType}
+                  onChange={(e) => setFormData({ ...formData, counterType: e.target.value })}
+                  className={`w-full bg-slate-950 text-white px-4 py-3 rounded-xl border ${
+                    formErrors.counterType ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
+                  } focus:outline-none text-sm`}
+                >
+                  <option value="">-- Select Counter Type --</option>
+                  {counterTypeOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {formErrors.counterType && (
+                  <p className="text-red-400 text-xs mt-1.5 font-medium">{formErrors.counterType}</p>
                 )}
               </div>
 

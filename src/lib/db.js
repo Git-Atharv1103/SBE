@@ -78,6 +78,7 @@ const MaterialSchema = new mongoose.Schema({
 
 const CustomerSchema = new mongoose.Schema({
   customerName: { type: String, required: true },
+  counterType: { type: String, required: true },
   phone: { type: String, required: true },
   address: { type: String, required: true },
   email: { type: String },

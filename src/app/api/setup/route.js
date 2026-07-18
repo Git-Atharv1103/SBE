@@ -62,9 +62,9 @@ export async function GET() {
     let customers = await getCustomers();
     if (!customers || customers.length === 0) {
       const mockCustomers = [
-        { customerName: 'ABC Fabrication & Erectors', phone: '9876543210', address: '123 Industrial Area, Phase 1, Mumbai', email: 'contact@abcfab.com' },
-        { customerName: 'Apex Engineering Ltd', phone: '9123456789', address: '45 Technology Park, Pune, Maharashtra', email: 'procurement@apexeng.co' },
-        { customerName: 'Sai Steel Works', phone: '9988776655', address: 'Shop No. 12, Market Road, Bangalore', email: 'saisteelworks@gmail.com' },
+        { customerName: 'ABC Fabrication & Erectors', counterType: 'Commercial Kitchen', phone: '9876543210', address: '123 Industrial Area, Phase 1, Mumbai', email: 'contact@abcfab.com' },
+        { customerName: 'Apex Engineering Ltd', counterType: 'Fast Food Counter', phone: '9123456789', address: '45 Technology Park, Pune, Maharashtra', email: 'procurement@apexeng.co' },
+        { customerName: 'Sai Steel Works', counterType: 'Bar Equipment', phone: '9988776655', address: 'Shop No. 12, Market Road, Bangalore', email: 'saisteelworks@gmail.com' },
       ];
       for (const cust of mockCustomers) {
         await createCustomer(cust);

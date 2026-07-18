@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { counterTypeOptions, counterTypeMaterialTemplates } from '@/lib/constants';
 
 export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const [customers, setCustomers] = useState([]);
@@ -42,17 +43,46 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
   // Quick Add Customer modal state
   const [isCustModalOpen, setIsCustModalOpen] = useState(false);
+
   const [custFormData, setCustFormData] = useState({
     customerName: '',
+    counterType: '',
     phone: '',
     address: '',
     email: ''
   });
   const [custErrors, setCustErrors] = useState({});
+  const [templateValues, setTemplateValues] = useState({});
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const createTemplateValues = (counterType) => {
+    const template = counterTypeMaterialTemplates[counterType] || [];
+    return template.reduce((acc, item) => {
+      acc[item.key] = {
+        quantity: item.defaultQuantity !== undefined ? item.defaultQuantity : '',
+        pipeSize: item.fields.pipeSize ? '' : '',
+        noOfLegs: item.fields.noOfLegs ? (item.defaultQuantity !== undefined ? item.defaultQuantity : '') : '',
+        dims: {
+          length: item.fields.length ? '' : '',
+          width: item.fields.width ? '' : '',
+          height: item.fields.height ? '' : '',
+          thickness: item.fields.thickness ? '' : ''
+        }
+      };
+      return acc;
+    }, {});
+  };
+
+  useEffect(() => {
+    if (projectData.customerId && counterTypeMaterialTemplates[projectData.customerId]) {
+      setTemplateValues(createTemplateValues(projectData.customerId));
+    } else {
+      setTemplateValues({});
+    }
+  }, [projectData.customerId]);
 
   useEffect(() => {
     if (projectToEdit) {
@@ -108,6 +138,59 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     return mat ? mat.unit : '';
   };
 
+  const parseNumber = (value) => {
+    const num = parseFloat(String(value).replace(/,/g, '.'));
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const getSteelWeightForTemplateItem = (item, values) => {
+    const density = 7850; // kg/m3 for steel
+    const qty = parseNumber(values.quantity);
+    const length = parseNumber(values.dims?.length);
+    const width = parseNumber(values.dims?.width);
+    const height = parseNumber(values.dims?.height);
+    const thickness = parseNumber(values.dims?.thickness);
+    const pipeSize = parseNumber(values.pipeSize);
+    const noOfLegs = parseNumber(values.noOfLegs);
+
+    const toMeters = (mm) => mm / 1000;
+    const lengthM = toMeters(length);
+    const widthM = toMeters(width);
+    const heightM = toMeters(height);
+    const thicknessM = toMeters(thickness);
+    const pipeM = pipeSize / 1000;
+
+    if (item.key === 'welding') {
+      if (!lengthM || !qty) return 0;
+      const weldCrossSection = 0.005 * 0.02; // 5mm by 20mm fillet approximation
+      return lengthM * weldCrossSection * density * qty;
+    }
+
+    if (item.fields.pipeSize && item.fields.noOfLegs) {
+      if (!pipeM || !heightM || !noOfLegs) return 0;
+      const area = Math.PI * Math.pow(pipeM / 2, 2);
+      return area * heightM * density * noOfLegs;
+    }
+
+    if (item.fields.pipeSize && heightM) {
+      if (!pipeM || !heightM || !qty) return 0;
+      const area = Math.PI * Math.pow(pipeM / 2, 2);
+      return area * heightM * density * qty;
+    }
+
+    if (lengthM && widthM && thicknessM && qty) {
+      return lengthM * widthM * thicknessM * density * qty;
+    }
+
+    return 0;
+  };
+
+  const totalSteelWeight = Object.entries(templateValues).reduce((sum, [key, values]) => {
+    const item = counterTypeMaterialTemplates[projectData.customerId]?.find(i => i.key === key);
+    if (!item) return sum;
+    return sum + getSteelWeightForTemplateItem(item, values);
+  }, 0);
+
   // Run calculations whenever list or summary costs change
   const materialTotal = selectedMaterialsList.reduce((sum, item) => sum + (item.total || 0), 0);
   const labourCostVal = Number(projectData.labourCost) || 0;
@@ -161,11 +244,38 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setSelectedMaterialsList(updated);
   };
 
+  const updateTemplateValue = (itemKey, field, value, dimName) => {
+    setTemplateValues((prev) => {
+      const existing = prev[itemKey] || { quantity: '', pipeSize: '', noOfLegs: '', dims: {} };
+      if (field === 'quantity' || field === 'pipeSize' || field === 'noOfLegs') {
+        return {
+          ...prev,
+          [itemKey]: {
+            ...existing,
+            [field]: value
+          }
+        };
+      }
+
+      return {
+        ...prev,
+        [itemKey]: {
+          ...existing,
+          dims: {
+            ...existing.dims,
+            [dimName]: value
+          }
+        }
+      };
+    });
+  };
+
   // QUICK ADD CUSTOMER SUBMISSION
   const handleQuickCustomerSubmit = async (e) => {
     e.preventDefault();
     const errors = {};
     if (!custFormData.customerName.trim()) errors.customerName = 'Name is required';
+    if (!custFormData.counterType.trim()) errors.counterType = 'Counter Type is required';
     if (!custFormData.phone.trim()) errors.phone = 'Phone is required';
     if (!custFormData.address.trim()) errors.address = 'Address is required';
     
@@ -203,16 +313,32 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       return;
     }
     if (!projectData.customerId) {
-      showStatus('warning', 'Please select a customer.');
+      showStatus('warning', 'Please select a counter type.');
       return;
     }
-    if (selectedMaterialsList.some(item => !item.materialId)) {
+
+    const isAutoSpec = Boolean(counterTypeMaterialTemplates[projectData.customerId]);
+    if (!isAutoSpec && selectedMaterialsList.some(item => !item.materialId)) {
       showStatus('warning', 'Please select a valid material for all rows.');
       return;
     }
 
     try {
       setLoading(true);
+      const materialsList = isAutoSpec
+        ? Object.entries(templateValues).map(([key, value]) => ({
+            materialId: key,
+            quantity: Number(value.quantity || 0),
+            unitPrice: 0,
+            total: 0
+          }))
+        : selectedMaterialsList.map(m => ({
+            materialId: m.materialId,
+            quantity: m.quantity,
+            unitPrice: m.unitPrice,
+            total: m.total
+          }));
+
       const payload = {
         projectData: {
           ...projectData,
@@ -221,12 +347,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           transportCost: transportCostVal,
           discount: discountVal
         },
-        materialsList: selectedMaterialsList.map(m => ({
-          materialId: m.materialId,
-          quantity: m.quantity,
-          unitPrice: m.unitPrice,
-          total: m.total
-        }))
+        materialsList
       };
 
       let res;
@@ -263,9 +384,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
   // PDF GENERATION WITH jspdf & jspdf-autotable
   const handleGeneratePDF = (shouldPrint = false) => {
-    const cust = customers.find(c => c._id === projectData.customerId);
-    if (!projectData.projectName.trim() || !cust) {
-      showStatus('warning', 'Ensure Project Name and Customer are selected to generate PDF.');
+    const selectedCounterType = projectData.customerId;
+    if (!projectData.projectName.trim() || !selectedCounterType) {
+      showStatus('warning', 'Ensure Project Name and Counter Type are selected to generate PDF.');
       return;
     }
 
@@ -295,7 +416,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     doc.setFont('Helvetica', 'bold');
     doc.text('COMMERCIAL QUOTATION', 130, 20);
 
-    // 2. Billing & Project Metadata Details
+    // 2. Billing & Client Data Details
     doc.setTextColor(15, 23, 42); // slate-900
     doc.setFontSize(10);
     doc.setFont('Helvetica', 'bold');
@@ -303,10 +424,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     
     doc.setFont('Helvetica', 'normal');
     doc.setTextColor(71, 85, 105); // slate-600
-    doc.text(`Customer: ${cust.customerName}`, 14, 58);
-    doc.text(`Phone: ${cust.phone}`, 14, 63);
-    doc.text(`Address: ${cust.address}`, 14, 68);
-    if (cust.email) doc.text(`Email: ${cust.email}`, 14, 73);
+    doc.text(`Counter Type: ${selectedCounterType}`, 14, 58);
 
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
@@ -489,13 +607,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form Area */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Project Details */}
+          {/* Client Data */}
           <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
-            <h3 className="text-white font-bold text-base mb-4 border-b border-slate-800 pb-2">1. Project Metadata</h3>
+            <h3 className="text-white font-bold text-base mb-4 border-b border-slate-800 pb-2">1. Client Data</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Project Name */}
+              {/* Client Name */}
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Project Name *</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Client Name *</label>
                 <input
                   type="text"
                   placeholder="e.g. Shed Extension Structure"
@@ -505,10 +623,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 />
               </div>
 
-              {/* Customer Dropdown */}
+              {/* Counter Type Dropdown */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Customer *</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Counter Type *</label>
                   <button
                     onClick={() => setIsCustModalOpen(true)}
                     className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold uppercase tracking-wider"
@@ -522,10 +640,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   onChange={(e) => setProjectData({ ...projectData, customerId: e.target.value })}
                   className="w-full bg-slate-950 text-white px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm"
                 >
-                  <option value="">-- Select Customer --</option>
-                  {customers.map(c => (
-                    <option key={c._id} value={c._id}>{c.customerName}</option>
+                  <option value="">-- Select Counter Type --</option>
+                  {counterTypeOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
                   ))}
+                  {projectData.customerId && !counterTypeOptions.includes(projectData.customerId) && (
+                    <option value={projectData.customerId} hidden>{customers.find(c => c._id === projectData.customerId)?.counterType || customers.find(c => c._id === projectData.customerId)?.customerName || projectData.customerId}</option>
+                  )}
                 </select>
               </div>
 
@@ -558,87 +679,212 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
               <h3 className="text-white font-bold text-base">2. Material Specifications</h3>
-              <button
-                onClick={handleAddRow}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 text-xs font-bold transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Material Row
-              </button>
+              <div className="rounded-full border border-slate-700 px-3 py-1 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                Auto-generated from Counter Type
+              </div>
             </div>
 
-            <div className="space-y-4">
-              {selectedMaterialsList.map((row, index) => (
-                <div 
-                  key={index} 
-                  className="flex flex-col md:flex-row md:items-end gap-3 p-4 bg-slate-950/40 border border-slate-800/50 rounded-xl relative group hover:border-slate-700/50 transition-all duration-300"
-                >
-                  {/* Remove Button for row */}
-                  <button
-                    onClick={() => handleRemoveRow(index)}
-                    disabled={selectedMaterialsList.length === 1}
-                    className="absolute top-3 right-3 md:relative md:top-0 md:right-0 p-2 text-slate-500 hover:text-red-400 disabled:opacity-30 rounded-lg hover:bg-red-500/10 transition-colors"
+
+            {counterTypeMaterialTemplates[projectData.customerId] ? (
+              <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/50">
+                <table className="min-w-full border-separate border-spacing-0 text-sm text-left">
+                  <thead className="sticky top-0 bg-slate-900 text-slate-300">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Material Component</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Length</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Width</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Height</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Thickness</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Pipe Size</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">No. of Legs</th>
+                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {counterTypeMaterialTemplates[projectData.customerId].map((item, index) => (
+                      <tr key={item.key} className={index % 2 === 0 ? 'bg-slate-950/70 hover:bg-slate-950' : 'bg-slate-950/40 hover:bg-slate-950'}>
+                        <td className="px-4 py-4 text-white border-b border-slate-800">{item.name}</td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.length ? (
+                            <input
+                              type="number"
+                              step="any"
+                              inputMode="decimal"
+                              value={templateValues[item.key]?.dims?.length || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'length')}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.width ? (
+                            <input
+                              type="number"
+                              step="any"
+                              inputMode="decimal"
+                              value={templateValues[item.key]?.dims?.width || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'width')}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.height ? (
+                            <input
+                              type="number"
+                              step="any"
+                              inputMode="decimal"
+                              value={templateValues[item.key]?.dims?.height || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'height')}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.thickness ? (
+                            <input
+                              type="number"
+                              step="any"
+                              inputMode="decimal"
+                              value={templateValues[item.key]?.dims?.thickness || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'thickness')}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.pipeSize ? (
+                            <input
+                              type="text"
+                              value={templateValues[item.key]?.pipeSize || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'pipeSize', e.target.value)}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.noOfLegs ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={templateValues[item.key]?.noOfLegs || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'noOfLegs', e.target.value)}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-b border-slate-800">
+                          {item.fields.qty ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={templateValues[item.key]?.quantity || ''}
+                              onChange={(e) => updateTemplateValue(item.key, 'quantity', e.target.value)}
+                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
+                            />
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-slate-400 text-sm">
+                Select a counter type to automatically load the Material Specification.
+              </div>
+            )}
+
+            {!counterTypeMaterialTemplates[projectData.customerId] && (
+              <div className="space-y-4">
+                {selectedMaterialsList.map((row, index) => (
+                  <div 
+                    key={index} 
+                    className="flex flex-col md:flex-row md:items-end gap-3 p-4 bg-slate-950/40 border border-slate-800/50 rounded-xl relative group hover:border-slate-700/50 transition-all duration-300"
                   >
-                    <Trash2 className="w-4.5 h-4.5" />
-                  </button>
-
-                  {/* Material Selection */}
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Material</label>
-                    <select
-                      value={row.materialId}
-                      onChange={(e) => handleRowChange(index, 'materialId', e.target.value)}
-                      className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                    {/* Remove Button for row */}
+                    <button
+                      onClick={() => handleRemoveRow(index)}
+                      disabled={selectedMaterialsList.length === 1}
+                      className="absolute top-3 right-3 md:relative md:top-0 md:right-0 p-2 text-slate-500 hover:text-red-400 disabled:opacity-30 rounded-lg hover:bg-red-500/10 transition-colors"
                     >
-                      <option value="">-- Choose Material --</option>
-                      {materials.map(m => (
-                        <option key={m._id} value={m._id}>{m.materialName} ({m.unit})</option>
-                      ))}
-                    </select>
-                  </div>
+                      <Trash2 className="w-4.5 h-4.5" />
+                    </button>
 
-                  {/* Quantity Input */}
-                  <div className="w-full md:w-28">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Quantity</label>
-                    <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pr-2">
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="Qty"
-                        value={row.quantity}
-                        onChange={(e) => handleRowChange(index, 'quantity', e.target.value)}
-                        className="w-full bg-transparent text-white px-3 py-2.5 focus:outline-none text-xs text-right font-semibold no-spinner"
-                      />
-                      <span className="text-[10px] text-slate-500 font-bold shrink-0">{row.unit || '-'}</span>
+                    {/* Material Selection */}
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Material</label>
+                      <select
+                        value={row.materialId}
+                        onChange={(e) => handleRowChange(index, 'materialId', e.target.value)}
+                        className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                      >
+                        <option value="">-- Choose Material --</option>
+                        {materials.map(m => (
+                          <option key={m._id} value={m._id}>{m.materialName} ({m.unit})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Quantity Input */}
+                    <div className="w-full md:w-28">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Quantity</label>
+                      <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pr-2">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Qty"
+                          value={row.quantity}
+                          onChange={(e) => handleRowChange(index, 'quantity', e.target.value)}
+                          className="w-full bg-transparent text-white px-3 py-2.5 focus:outline-none text-xs text-right font-semibold no-spinner"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold shrink-0">{row.unit || '-'}</span>
+                      </div>
+                    </div>
+
+                    {/* Rate Input */}
+                    <div className="w-full md:w-32">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Rate (₹)</label>
+                      <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pl-2">
+                        <span className="text-xs text-slate-500 shrink-0 font-bold">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Rate"
+                          value={row.unitPrice}
+                          onChange={(e) => handleRowChange(index, 'unitPrice', e.target.value)}
+                          className="w-full bg-transparent text-white px-2 py-2.5 focus:outline-none text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Line Total */}
+                    <div className="w-full md:w-36 text-right pb-1">
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 text-left md:text-right">Line Total</span>
+                      <span className="text-sm font-bold text-emerald-400 block pr-2">
+                        ₹{row.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
                   </div>
-
-                  {/* Rate Input */}
-                  <div className="w-full md:w-32">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Rate (₹)</label>
-                    <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pl-2">
-                      <span className="text-xs text-slate-500 shrink-0 font-bold">₹</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Rate"
-                        value={row.unitPrice}
-                        onChange={(e) => handleRowChange(index, 'unitPrice', e.target.value)}
-                        className="w-full bg-transparent text-white px-2 py-2.5 focus:outline-none text-xs font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Line Total */}
-                  <div className="w-full md:w-36 text-right pb-1">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 text-left md:text-right">Line Total</span>
-                    <span className="text-sm font-bold text-emerald-400 block pr-2">
-                      ₹{row.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -689,6 +935,17 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   onChange={(e) => setProjectData({ ...projectData, discount: parseFloat(e.target.value) || 0 })}
                   className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm font-semibold text-right"
                 />
+              </div>
+
+              {/* Steel Weight */}
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-slate-400 text-sm uppercase tracking-wider">Steel Weight</p>
+                    <p className="text-white text-lg font-bold">{totalSteelWeight.toFixed(2)} kg</p>
+                  </div>
+                  <div className="text-slate-400 text-xs">Automatically calculated from component dimensions</div>
+                </div>
               </div>
 
               {/* GST Percent */}
@@ -761,16 +1018,22 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 9876543210"
-                  value={custFormData.phone}
-                  onChange={(e) => setCustFormData({ ...custFormData, phone: e.target.value })}
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Counter Type *</label>
+                <select
+                  value={custFormData.counterType}
+                  onChange={(e) => setCustFormData({ ...custFormData, counterType: e.target.value })}
                   className={`w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border ${
-                    custErrors.phone ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
+                    custErrors.counterType ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
                   } focus:outline-none text-xs`}
-                />
+                >
+                  <option value="">-- Select Counter Type --</option>
+                  {counterTypeOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {custErrors.counterType && (
+                  <p className="text-red-400 text-[10px] mt-1.5 font-medium">{custErrors.counterType}</p>
+                )}
               </div>
 
               <div>

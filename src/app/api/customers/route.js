@@ -13,8 +13,8 @@ export async function GET() {
 export async function POST(request) {
   try {
     const data = await request.json();
-    if (!data.customerName || !data.phone || !data.address) {
-      return NextResponse.json({ error: 'Customer Name, Phone and Address are required' }, { status: 400 });
+    if (!data.customerName || !data.counterType || !data.phone || !data.address) {
+      return NextResponse.json({ error: 'Customer Name, Counter Type, Phone and Address are required' }, { status: 400 });
     }
     const newCustomer = await createCustomer(data);
     return NextResponse.json(newCustomer, { status: 201 });
