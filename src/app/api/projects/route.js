@@ -23,37 +23,35 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { projectData, materialsList } = await request.json();
+    const body = await request.json();
+    const projectData = body.projectData || body;
+    const materialsList = body.materialsList || [];
     
-    if (!projectData || !projectData.projectName || !projectData.customerId) {
-      return NextResponse.json({ error: 'Project Name and Customer are required' }, { status: 400 });
-    }
-    
-    if (!materialsList || !Array.isArray(materialsList)) {
-      return NextResponse.json({ error: 'Materials list is required' }, { status: 400 });
+    if (!projectData || (!projectData.projectName && !projectData.customerName)) {
+      return NextResponse.json({ error: 'Project Name or Customer Name is required' }, { status: 400 });
     }
     
     const newProject = await createProject(projectData, materialsList);
     return NextResponse.json(newProject, { status: 201 });
   } catch (error) {
+    console.error('Create Project Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 export async function PUT(request) {
   try {
-    const { id, projectData, materialsList } = await request.json();
+    const body = await request.json();
+    const id = body.id || body._id || body.projectData?._id;
+    const projectData = body.projectData || body;
+    const materialsList = body.materialsList || [];
     
     if (!id) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
     
-    if (!projectData || !projectData.projectName || !projectData.customerId) {
-      return NextResponse.json({ error: 'Project Name and Customer are required' }, { status: 400 });
-    }
-    
-    if (!materialsList || !Array.isArray(materialsList)) {
-      return NextResponse.json({ error: 'Materials list is required' }, { status: 400 });
+    if (!projectData || (!projectData.projectName && !projectData.customerName)) {
+      return NextResponse.json({ error: 'Project Name or Customer Name is required' }, { status: 400 });
     }
     
     const updated = await updateProject(id, projectData, materialsList);
@@ -63,6 +61,7 @@ export async function PUT(request) {
     
     return NextResponse.json(updated);
   } catch (error) {
+    console.error('Update Project Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

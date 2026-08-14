@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Meta-Fab Estimator Pro - Cost Estimation System",
-  description: "Professional cost estimation and commercial quotation system for metal fabrication shops.",
+  title: "Shree Balaji Enterprises - Kitchen Equipment Estimation System",
+  description: "Commercial/Hotel Kitchen Equipment, Canteen Kitchen Equipment, Refrigeration Equipments, Fastfood/Display Counter, Exhaust Ventilation System, Food Processing Machine, Commercial Dishwasher",
 };
 
 export default function RootLayout({ children }) {

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getProjects, getCustomers, getMaterials, getCategories, connectDB, getProjectMaterials } from '@/lib/db';
-import fs from 'fs';
-import path from 'path';
+import { getProjects, getCustomers, getMaterials, getCategories, connectDB } from '@/lib/db';
 
 export async function GET() {
   try {
@@ -12,10 +10,11 @@ export async function GET() {
     const materials = await getMaterials();
     const categories = await getCategories();
 
-    // 1. Calculate Metrics
+    // 1. Calculate Core Metrics
     const totalProjects = projects.length;
     const totalCustomers = customers.length;
-    const estimatedRevenue = projects.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+    const totalMaterialWeight = projects.reduce((sum, p) => sum + (Number(p.totalMaterialWeight) || 0), 0);
+    const estimatedRevenue = projects.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
 
     // Calculate Today's Quotations
     const today = new Date();
@@ -48,51 +47,41 @@ export async function GET() {
       
       if (monthlyDataMap[key]) {
         monthlyDataMap[key].count += 1;
-        monthlyDataMap[key].revenue += p.totalAmount || 0;
+        monthlyDataMap[key].revenue += Number(p.totalAmount) || 0;
       }
     });
 
     const monthlyData = Object.values(monthlyDataMap).sort((a, b) => a.sortKey - b.sortKey);
 
-    // 3. Prepare Material Usage Data (Group by Material Category)
-    const projectMaterials = await getProjectMaterials();
+    // 3. Prepare Material Usage Data (Grouped by Category: Sheet vs Pipe vs Purchased)
+    let sheetCount = 0;
+    let pipeCount = 0;
+    let purchasedCount = 0;
 
-    // Map material ID to Category Name
-    const materialIdToCatName = {};
-    const catMap = {};
-    categories.forEach(c => { catMap[c._id] = c.categoryName; });
-    materials.forEach(m => {
-      materialIdToCatName[m._id] = catMap[m.categoryId] || 'Other';
+    projects.forEach((p) => {
+      sheetCount += (p.sheets || []).reduce((s, row) => s + (Number(row.quantity) || 0), 0);
+      pipeCount += (p.pipes || []).reduce((s, row) => s + (Number(row.quantity) || 0), 0);
+      purchasedCount += (p.purchased || []).reduce((s, row) => s + (Number(row.quantity) || 0), 0);
     });
 
-    const materialUsageMap = {};
-    projectMaterials.forEach((pm) => {
-      const catName = materialIdToCatName[pm.materialId] || 'Other';
-      materialUsageMap[catName] = (materialUsageMap[catName] || 0) + (pm.quantity || 0);
-    });
-
-    // Make default entries if empty
-    if (Object.keys(materialUsageMap).length === 0) {
-      categories.slice(0, 4).forEach(c => {
-        materialUsageMap[c.categoryName] = 0;
-      });
-    }
-
-    const materialUsage = Object.entries(materialUsageMap).map(([name, value]) => ({
-      name,
-      value,
-    }));
+    const materialUsage = [
+      { name: 'Sheet Materials', value: sheetCount },
+      { name: 'Pipe Materials', value: pipeCount },
+      { name: 'Purchased Items', value: purchasedCount }
+    ];
 
     return NextResponse.json({
       metrics: {
         totalProjects,
+        totalEstimates: totalProjects,
+        totalMaterialWeight: Number(totalMaterialWeight.toFixed(2)),
         todayQuotations,
         totalCustomers,
         estimatedRevenue,
       },
       charts: {
-        monthlyData, // Monthly counts and revenue
-        materialUsage, // Grouped by category
+        monthlyData,
+        materialUsage,
       },
     });
   } catch (error) {

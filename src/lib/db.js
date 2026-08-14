@@ -68,50 +68,67 @@ const CategorySchema = new mongoose.Schema({
 
 const MaterialSchema = new mongoose.Schema({
   materialName: { type: String, required: true },
-  categoryId: { type: String, required: true },
-  unit: { type: String, required: true },
-  price: { type: Number, required: true },
+  category: { type: String, enum: ['Sheet', 'Pipe', 'Purchased'], default: 'Sheet' },
+  grade: { type: String, default: 'SS304' },
+  unit: { type: String, default: 'kg' },
+  price: { type: Number, default: 0 },
   description: { type: String },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+  dimensions: { type: mongoose.Schema.Types.Mixed },
   createdAt: { type: Date, default: Date.now },
 });
 
 const CustomerSchema = new mongoose.Schema({
   customerName: { type: String, required: true },
-  counterType: { type: String, required: true },
+  companyName: { type: String },
+  counterType: { type: String },
   phone: { type: String, required: true },
   address: { type: String, required: true },
   email: { type: String },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const ProjectSchema = new mongoose.Schema({
+  estimateNumber: { type: String },
   projectName: { type: String, required: true },
-  customerId: { type: String, required: true },
+  customerId: { type: String },
+  customerName: { type: String },
+  companyName: { type: String },
+  phone: { type: String },
+  email: { type: String },
+  address: { type: String },
+  counterType: { type: String, required: true },
   date: { type: Date, default: Date.now },
   remarks: { type: String },
+  
+  // Material breakdown
+  sheets: [{ type: mongoose.Schema.Types.Mixed }],
+  pipes: [{ type: mongoose.Schema.Types.Mixed }],
+  purchased: [{ type: mongoose.Schema.Types.Mixed }],
+  
+  // Pricing inputs
+  materialRate: { type: Number, default: 0 },
   labourCost: { type: Number, default: 0 },
-  transportCost: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
-  gst: { type: Number, default: 0 }, // percentage
+  gst: { type: Number, default: 18 },
+  
+  // Calculated outcomes
+  totalMaterialWeight: { type: Number, default: 0 },
+  materialCost: { type: Number, default: 0 },
+  subtotal: { type: Number, default: 0 },
+  taxableAmount: { type: Number, default: 0 },
+  gstAmount: { type: Number, default: 0 },
   totalAmount: { type: Number, default: 0 },
-});
-
-const ProjectMaterialSchema = new mongoose.Schema({
-  projectId: { type: String, required: true },
-  materialId: { type: String, required: true },
-  quantity: { type: Number, required: true },
-  unitPrice: { type: Number, required: true },
-  total: { type: Number, required: true },
+  status: { type: String, default: 'Active' }
 });
 
 // Cache mongoose models
-let Category, Material, Customer, Project, ProjectMaterial;
+let Category, Material, Customer, Project;
 if (useMongo) {
   Category = mongoose.models.Category || mongoose.model('Category', CategorySchema);
   Material = mongoose.models.Material || mongoose.model('Material', MaterialSchema);
   Customer = mongoose.models.Customer || mongoose.model('Customer', CustomerSchema);
   Project = mongoose.models.Project || mongoose.model('Project', ProjectSchema);
-  ProjectMaterial = mongoose.models.ProjectMaterial || mongoose.model('ProjectMaterial', ProjectMaterialSchema);
 }
 
 // Cache MongoDB connection state
@@ -152,7 +169,7 @@ export async function getCategories() {
     return await Category.find({}).lean();
   } else {
     const db = readJsonDb();
-    return db.categories;
+    return db.categories || [];
   }
 }
 
@@ -171,14 +188,14 @@ export async function createCategory(data) {
   }
 }
 
-// MATERIAL REPOSITORY
+// MATERIAL REPOSITORY (STAINLESS STEEL ONLY)
 export async function getMaterials() {
   await connectDB();
   if (useMongo) {
     return await Material.find({}).lean();
   } else {
     const db = readJsonDb();
-    return db.materials;
+    return db.materials || [];
   }
 }
 
@@ -194,9 +211,11 @@ export async function createMaterial(data) {
       _id: generateId(),
       createdAt: new Date().toISOString(),
       status: 'Active',
+      grade: data.grade || 'SS304',
       ...data,
       price: Number(data.price || 0),
     };
+    db.materials = db.materials || [];
     db.materials.push(newMaterial);
     writeJsonDb(db);
     return newMaterial;
@@ -209,7 +228,7 @@ export async function updateMaterial(id, data) {
     return await Material.findByIdAndUpdate(id, data, { new: true }).lean();
   } else {
     const db = readJsonDb();
-    const index = db.materials.findIndex((m) => m._id === id);
+    const index = (db.materials || []).findIndex((m) => m._id === id);
     if (index === -1) return null;
     db.materials[index] = {
       ...db.materials[index],
@@ -227,7 +246,7 @@ export async function deleteMaterial(id) {
     return await Material.findByIdAndDelete(id).lean();
   } else {
     const db = readJsonDb();
-    const index = db.materials.findIndex((m) => m._id === id);
+    const index = (db.materials || []).findIndex((m) => m._id === id);
     if (index === -1) return null;
     const deleted = db.materials.splice(index, 1)[0];
     writeJsonDb(db);
@@ -242,7 +261,7 @@ export async function getCustomers() {
     return await Customer.find({}).lean();
   } else {
     const db = readJsonDb();
-    return db.customers;
+    return db.customers || [];
   }
 }
 
@@ -254,7 +273,12 @@ export async function createCustomer(data) {
     return customer.toObject();
   } else {
     const db = readJsonDb();
-    const newCustomer = { _id: generateId(), ...data };
+    const newCustomer = {
+      _id: generateId(),
+      createdAt: new Date().toISOString(),
+      ...data
+    };
+    db.customers = db.customers || [];
     db.customers.push(newCustomer);
     writeJsonDb(db);
     return newCustomer;
@@ -267,7 +291,7 @@ export async function updateCustomer(id, data) {
     return await Customer.findByIdAndUpdate(id, data, { new: true }).lean();
   } else {
     const db = readJsonDb();
-    const index = db.customers.findIndex((c) => c._id === id);
+    const index = (db.customers || []).findIndex((c) => c._id === id);
     if (index === -1) return null;
     db.customers[index] = { ...db.customers[index], ...data };
     writeJsonDb(db);
@@ -281,7 +305,7 @@ export async function deleteCustomer(id) {
     return await Customer.findByIdAndDelete(id).lean();
   } else {
     const db = readJsonDb();
-    const index = db.customers.findIndex((c) => c._id === id);
+    const index = (db.customers || []).findIndex((c) => c._id === id);
     if (index === -1) return null;
     const deleted = db.customers.splice(index, 1)[0];
     writeJsonDb(db);
@@ -289,211 +313,147 @@ export async function deleteCustomer(id) {
   }
 }
 
-// PROJECTS & PROJECT MATERIALS REPOSITORY
+// PROJECTS / ESTIMATIONS REPOSITORY
 export async function getProjects() {
   await connectDB();
   if (useMongo) {
     return await Project.find({}).lean();
   } else {
     const db = readJsonDb();
-    return db.projects;
+    return db.projects || [];
   }
 }
 
 export async function getProjectById(id) {
   await connectDB();
   if (useMongo) {
-    const project = await Project.findById(id).lean();
-    if (!project) return null;
-    const materials = await ProjectMaterial.find({ projectId: id }).lean();
-    return { ...project, materials };
+    return await Project.findById(id).lean();
   } else {
     const db = readJsonDb();
-    const project = db.projects.find((p) => p._id === id);
-    if (!project) return null;
-    const materials = db.projectMaterials.filter((pm) => pm.projectId === id);
-    return { ...project, materials };
+    const project = (db.projects || []).find((p) => p._id === id);
+    return project || null;
   }
 }
 
-export async function createProject(projectData, materialsList) {
+export async function createProject(projectData, materialsList = []) {
   await connectDB();
+  
+  // Format estimate number if not provided
+  const estimateNumber = projectData.estimateNumber || `EST-${Date.now().toString().slice(-6)}`;
+  
+  // Ensure structured materials are stored
+  const sheets = projectData.sheets || [];
+  const pipes = projectData.pipes || [];
+  const purchased = projectData.purchased || [];
+
+  const record = {
+    estimateNumber,
+    projectName: projectData.projectName,
+    customerId: projectData.customerId || '',
+    customerName: projectData.customerName || '',
+    companyName: projectData.companyName || '',
+    phone: projectData.phone || '',
+    email: projectData.email || '',
+    address: projectData.address || '',
+    counterType: projectData.counterType,
+    date: projectData.date || new Date().toISOString(),
+    remarks: projectData.remarks || '',
+    sheets,
+    pipes,
+    purchased,
+    materialRate: Number(projectData.materialRate || 0),
+    labourCost: Number(projectData.labourCost || 0),
+    discount: Number(projectData.discount || 0),
+    gst: Number(projectData.gst !== undefined ? projectData.gst : 18),
+    totalMaterialWeight: Number(projectData.totalMaterialWeight || 0),
+    materialCost: Number(projectData.materialCost || 0),
+    subtotal: Number(projectData.subtotal || 0),
+    taxableAmount: Number(projectData.taxableAmount || 0),
+    gstAmount: Number(projectData.gstAmount || 0),
+    totalAmount: Number(projectData.totalAmount || projectData.grandTotal || 0),
+    status: projectData.status || 'Active'
+  };
+
   if (useMongo) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-      const project = new Project(projectData);
-      await project.save({ session });
-
-      const pMaterials = materialsList.map((m) => new ProjectMaterial({
-        projectId: project._id.toString(),
-        materialId: m.materialId,
-        quantity: Number(m.quantity),
-        unitPrice: Number(m.unitPrice),
-        total: Number(m.total),
-      }));
-
-      if (pMaterials.length > 0) {
-        await ProjectMaterial.insertMany(pMaterials, { session });
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      return { ...project.toObject(), materials: pMaterials.map(pm => pm.toObject()) };
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-      throw error;
-    }
+    const project = new Project(record);
+    await project.save();
+    return project.toObject();
   } else {
     const db = readJsonDb();
-    const projectId = generateId();
     const newProject = {
-      _id: projectId,
-      date: projectData.date || new Date().toISOString(),
-      projectName: projectData.projectName,
-      customerId: projectData.customerId,
-      remarks: projectData.remarks || '',
-      labourCost: Number(projectData.labourCost || 0),
-      transportCost: Number(projectData.transportCost || 0),
-      discount: Number(projectData.discount || 0),
-      gst: Number(projectData.gst || 0),
-      totalAmount: Number(projectData.totalAmount || 0),
-    };
-
-    const newProjectMaterials = materialsList.map((m) => ({
       _id: generateId(),
-      projectId,
-      materialId: m.materialId,
-      quantity: Number(m.quantity),
-      unitPrice: Number(m.unitPrice),
-      total: Number(m.total),
-    }));
-
+      ...record
+    };
+    db.projects = db.projects || [];
     db.projects.push(newProject);
-    db.projectMaterials.push(...newProjectMaterials);
     writeJsonDb(db);
-
-    return { ...newProject, materials: newProjectMaterials };
+    return newProject;
   }
 }
 
-export async function updateProject(id, projectData, materialsList) {
+export async function updateProject(id, projectData, materialsList = []) {
   await connectDB();
+  
+  const sheets = projectData.sheets || [];
+  const pipes = projectData.pipes || [];
+  const purchased = projectData.purchased || [];
+
+  const updateFields = {
+    estimateNumber: projectData.estimateNumber,
+    projectName: projectData.projectName,
+    customerId: projectData.customerId,
+    customerName: projectData.customerName,
+    companyName: projectData.companyName,
+    phone: projectData.phone,
+    email: projectData.email,
+    address: projectData.address,
+    counterType: projectData.counterType,
+    date: projectData.date,
+    remarks: projectData.remarks || '',
+    sheets,
+    pipes,
+    purchased,
+    materialRate: Number(projectData.materialRate || 0),
+    labourCost: Number(projectData.labourCost || 0),
+    discount: Number(projectData.discount || 0),
+    gst: Number(projectData.gst !== undefined ? projectData.gst : 18),
+    totalMaterialWeight: Number(projectData.totalMaterialWeight || 0),
+    materialCost: Number(projectData.materialCost || 0),
+    subtotal: Number(projectData.subtotal || 0),
+    taxableAmount: Number(projectData.taxableAmount || 0),
+    gstAmount: Number(projectData.gstAmount || 0),
+    totalAmount: Number(projectData.totalAmount || projectData.grandTotal || 0),
+    status: projectData.status || 'Active'
+  };
+
   if (useMongo) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-      const updatedProject = await Project.findByIdAndUpdate(id, projectData, { new: true, session }).lean();
-      if (!updatedProject) {
-        await session.abortTransaction();
-        session.endSession();
-        return null;
-      }
-
-      // Delete existing project materials
-      await ProjectMaterial.deleteMany({ projectId: id }, { session });
-
-      // Insert new project materials
-      const pMaterials = materialsList.map((m) => new ProjectMaterial({
-        projectId: id,
-        materialId: m.materialId,
-        quantity: Number(m.quantity),
-        unitPrice: Number(m.unitPrice),
-        total: Number(m.total),
-      }));
-
-      if (pMaterials.length > 0) {
-        await ProjectMaterial.insertMany(pMaterials, { session });
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      return { ...updatedProject, materials: pMaterials.map(pm => pm.toObject()) };
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-      throw error;
-    }
+    const updated = await Project.findByIdAndUpdate(id, updateFields, { new: true }).lean();
+    return updated;
   } else {
     const db = readJsonDb();
-    const index = db.projects.findIndex((p) => p._id === id);
+    const index = (db.projects || []).findIndex((p) => p._id === id);
     if (index === -1) return null;
 
     db.projects[index] = {
       ...db.projects[index],
-      projectName: projectData.projectName,
-      customerId: projectData.customerId,
-      remarks: projectData.remarks || '',
-      labourCost: Number(projectData.labourCost || 0),
-      transportCost: Number(projectData.transportCost || 0),
-      discount: Number(projectData.discount || 0),
-      gst: Number(projectData.gst || 0),
-      totalAmount: Number(projectData.totalAmount || 0),
-      date: projectData.date || db.projects[index].date,
+      ...updateFields
     };
-
-    // Filter out old materials
-    db.projectMaterials = db.projectMaterials.filter((pm) => pm.projectId !== id);
-
-    // Insert new materials
-    const newProjectMaterials = materialsList.map((m) => ({
-      _id: generateId(),
-      projectId: id,
-      materialId: m.materialId,
-      quantity: Number(m.quantity),
-      unitPrice: Number(m.unitPrice),
-      total: Number(m.total),
-    }));
-
-    db.projectMaterials.push(...newProjectMaterials);
     writeJsonDb(db);
-
-    return { ...db.projects[index], materials: newProjectMaterials };
+    return db.projects[index];
   }
 }
 
 export async function deleteProject(id) {
   await connectDB();
   if (useMongo) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-      const deleted = await Project.findByIdAndDelete(id, { session }).lean();
-      if (!deleted) {
-        await session.abortTransaction();
-        session.endSession();
-        return null;
-      }
-      await ProjectMaterial.deleteMany({ projectId: id }, { session });
-      await session.commitTransaction();
-      session.endSession();
-      return deleted;
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-      throw error;
-    }
+    return await Project.findByIdAndDelete(id).lean();
   } else {
     const db = readJsonDb();
-    const index = db.projects.findIndex((p) => p._id === id);
+    const index = (db.projects || []).findIndex((p) => p._id === id);
     if (index === -1) return null;
 
     const deleted = db.projects.splice(index, 1)[0];
-    db.projectMaterials = db.projectMaterials.filter((pm) => pm.projectId !== id);
     writeJsonDb(db);
     return deleted;
-  }
-}
-
-export async function getProjectMaterials() {
-  await connectDB();
-  if (useMongo) {
-    return await ProjectMaterial.find({}).lean();
-  } else {
-    const db = readJsonDb();
-    return db.projectMaterials || [];
   }
 }

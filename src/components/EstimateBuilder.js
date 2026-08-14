@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -6,369 +6,273 @@ import {
   Download, 
   Printer, 
   Loader2, 
-  UserPlus, 
   AlertCircle, 
   CheckCircle,
-  X
+  X,
+  RotateCcw,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { counterTypeOptions, counterTypeMaterialTemplates } from '@/lib/constants';
+import { 
+  COUNTER_TYPES, 
+  COUNTER_TYPE_TEMPLATES, 
+  STAINLESS_STEEL_GRADES, 
+  STANDARD_GAUGES, 
+  PIPE_MASTER,
+  DEFAULT_GST_PERCENT 
+} from '@/lib/constants';
+import { 
+  calculateRowWeight, 
+  calculateEstimate, 
+  calculatePurchasedItemWeight,
+  formatCurrency, 
+  formatWeight,
+  formatPurchasedWeight 
+} from '@/lib/calculations';
+import { generateQuotationPDF } from '@/lib/pdfGenerator';
 
 export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
-  const [customers, setCustomers] = useState([]);
-  const [materials, setMaterials] = useState([]);
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  
-  // Status feedback
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // Form state
-  const [projectData, setProjectData] = useState({
-    projectName: '',
-    customerId: '',
-    date: new Date().toISOString().split('T')[0],
-    remarks: '',
-    labourCost: 0,
-    transportCost: 0,
-    discount: 0,
-    gst: 18,
-    totalAmount: 0
-  });
-
-  const [selectedMaterialsList, setSelectedMaterialsList] = useState([
-    { materialId: '', quantity: 1, unitPrice: 0, unit: '', total: 0 }
-  ]);
-
-  // Quick Add Customer modal state
-  const [isCustModalOpen, setIsCustModalOpen] = useState(false);
-
-  const [custFormData, setCustFormData] = useState({
+  // Form State - Step 1: Client Data (Minimal & Clean)
+  const [clientData, setClientData] = useState({
     customerName: '',
-    counterType: '',
+    companyName: '',
     phone: '',
-    address: '',
-    email: ''
+    email: '',
+    counterType: '',
+    estimateNumber: `EST-${Date.now().toString().slice(-6)}`,
+    date: new Date().toISOString().split('T')[0]
   });
-  const [custErrors, setCustErrors] = useState({});
-  const [templateValues, setTemplateValues] = useState({});
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Form State - Step 2: Material Specifications (Sheet, Pipe, Purchased)
+  const [sheets, setSheets] = useState([]);
+  const [pipes, setPipes] = useState([]);
+  const [purchased, setPurchased] = useState([]);
 
-  const createTemplateValues = (counterType) => {
-    const template = counterTypeMaterialTemplates[counterType] || [];
-    return template.reduce((acc, item) => {
-      acc[item.key] = {
-        quantity: item.defaultQuantity !== undefined ? item.defaultQuantity : '',
-        pipeSize: item.fields.pipeSize ? '' : '',
-        noOfLegs: item.fields.noOfLegs ? (item.defaultQuantity !== undefined ? item.defaultQuantity : '') : '',
-        dims: {
-          length: item.fields.length ? '' : '',
-          width: item.fields.width ? '' : '',
-          height: item.fields.height ? '' : '',
-          thickness: item.fields.thickness ? '' : ''
-        }
-      };
-      return acc;
-    }, {});
-  };
+  // Form State - Step 3: Cost Summary Inputs (string-based to keep blank inputs visually empty)
+  const [pricingInputs, setPricingInputs] = useState({
+    materialRate: '',
+    labourCost: '',
+    gst: String(DEFAULT_GST_PERCENT),
+    discount: ''
+  });
 
-  useEffect(() => {
-    if (projectData.customerId && counterTypeMaterialTemplates[projectData.customerId]) {
-      setTemplateValues(createTemplateValues(projectData.customerId));
-    } else {
-      setTemplateValues({});
-    }
-  }, [projectData.customerId]);
+  // Modal State for adding custom material row
+  const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
 
+  // Initialize or Reopen Project
   useEffect(() => {
     if (projectToEdit) {
-      setProjectData({
-        projectName: projectToEdit.projectName,
-        customerId: projectToEdit.customerId,
-        date: new Date(projectToEdit.date).toISOString().split('T')[0],
-        remarks: projectToEdit.remarks || '',
-        labourCost: projectToEdit.labourCost || 0,
-        transportCost: projectToEdit.transportCost || 0,
-        discount: projectToEdit.discount || 0,
-        gst: projectToEdit.gst !== undefined ? projectToEdit.gst : 18,
-        totalAmount: projectToEdit.totalAmount || 0
+      setClientData({
+        customerName: projectToEdit.customerName || '',
+        companyName: projectToEdit.companyName || '',
+        phone: projectToEdit.phone || '',
+        email: projectToEdit.email || '',
+        counterType: projectToEdit.counterType || '',
+        estimateNumber: projectToEdit.estimateNumber || `EST-${Date.now().toString().slice(-6)}`,
+        date: projectToEdit.date ? new Date(projectToEdit.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       });
 
-      if (projectToEdit.materials && projectToEdit.materials.length > 0) {
-        setSelectedMaterialsList(projectToEdit.materials.map(m => ({
-          materialId: m.materialId,
-          quantity: m.quantity,
-          unitPrice: m.unitPrice,
-          unit: getMaterialUnit(m.materialId),
-          total: m.total
-        })));
-      } else {
-        setSelectedMaterialsList([{ materialId: '', quantity: 1, unitPrice: 0, unit: '', total: 0 }]);
-      }
-    }
-  }, [projectToEdit, materials]);
+      setSheets(projectToEdit.sheets || []);
+      setPipes(projectToEdit.pipes || []);
+      setPurchased(projectToEdit.purchased || []);
 
-  const fetchData = async () => {
-    try {
-      setInitialLoading(true);
-      const [cRes, mRes] = await Promise.all([
-        fetch('/api/customers'),
-        fetch('/api/materials')
-      ]);
-      if (cRes.ok && mRes.ok) {
-        const cData = await cRes.json();
-        const mData = await mRes.json();
-        setCustomers(cData);
-        // Only active materials can be added to new estimates
-        setMaterials(mData.filter(m => m.status === 'Active' || (projectToEdit && projectToEdit.materials?.some(pm => pm.materialId === m._id))));
-      }
-    } catch (e) {
-      console.error('Error fetching builder dependencies:', e);
-    } finally {
-      setInitialLoading(false);
+      setPricingInputs({
+        materialRate: projectToEdit.materialRate ? String(projectToEdit.materialRate) : '',
+        labourCost: projectToEdit.labourCost ? String(projectToEdit.labourCost) : '',
+        gst: projectToEdit.gst !== undefined ? String(projectToEdit.gst) : String(DEFAULT_GST_PERCENT),
+        discount: projectToEdit.discount ? String(projectToEdit.discount) : ''
+      });
     }
+  }, [projectToEdit]);
+
+  // Load Material Component Structure for Selected Counter Type (Without pre-filled dimensions or quantities)
+  const loadCounterTemplate = (counterType) => {
+    if (!counterType) {
+      setSheets([]);
+      setPipes([]);
+      setPurchased([]);
+      return;
+    }
+    const template = COUNTER_TYPE_TEMPLATES[counterType] || { sheets: [], pipes: [], purchased: [] };
+    setSheets(JSON.parse(JSON.stringify(template.sheets || [])));
+    setPipes(JSON.parse(JSON.stringify(template.pipes || [])));
+    setPurchased(JSON.parse(JSON.stringify(template.purchased || [])));
   };
 
-  const getMaterialUnit = (mId) => {
-    const mat = materials.find(m => m._id === mId);
-    return mat ? mat.unit : '';
+  const handleCounterTypeChange = (newType) => {
+    setClientData(prev => ({ ...prev, counterType: newType }));
+    loadCounterTemplate(newType);
   };
 
-  const parseNumber = (value) => {
-    const num = parseFloat(String(value).replace(/,/g, '.'));
-    return Number.isFinite(num) ? num : 0;
+  // Helper to normalize numeric input (stripping non-numbers and invalid leading zeros)
+  const sanitizeNumericInput = (val) => {
+    if (val === '' || val === null || val === undefined) return '';
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0) return '';
+    return String(val).replace(/^0+(?=\d)/, '');
   };
 
-  const getSteelWeightForTemplateItem = (item, values) => {
-    const density = 7850; // kg/m3 for steel
-    const qty = parseNumber(values.quantity);
-    const length = parseNumber(values.dims?.length);
-    const width = parseNumber(values.dims?.width);
-    const height = parseNumber(values.dims?.height);
-    const thickness = parseNumber(values.dims?.thickness);
-    const pipeSize = parseNumber(values.pipeSize);
-    const noOfLegs = parseNumber(values.noOfLegs);
+  // Master Reactive Calculation (Single Source of Truth)
+  const calculation = useMemo(() => {
+    const rate = parseFloat(pricingInputs.materialRate) || 0;
+    const labour = parseFloat(pricingInputs.labourCost) || 0;
+    const disc = parseFloat(pricingInputs.discount) || 0;
+    const gstVal = pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : DEFAULT_GST_PERCENT;
 
-    const toMeters = (mm) => mm / 1000;
-    const lengthM = toMeters(length);
-    const widthM = toMeters(width);
-    const heightM = toMeters(height);
-    const thicknessM = toMeters(thickness);
-    const pipeM = pipeSize / 1000;
+    return calculateEstimate({
+      materials: { sheets, pipes, purchased },
+      materialRate: rate,
+      labourCost: labour,
+      discount: disc,
+      gst: gstVal
+    });
+  }, [sheets, pipes, purchased, pricingInputs]);
 
-    if (item.key === 'welding') {
-      if (!lengthM || !qty) return 0;
-      const weldCrossSection = 0.005 * 0.02; // 5mm by 20mm fillet approximation
-      return lengthM * weldCrossSection * density * qty;
-    }
-
-    if (item.fields.pipeSize && item.fields.noOfLegs) {
-      if (!pipeM || !heightM || !noOfLegs) return 0;
-      const area = Math.PI * Math.pow(pipeM / 2, 2);
-      return area * heightM * density * noOfLegs;
-    }
-
-    if (item.fields.pipeSize && heightM) {
-      if (!pipeM || !heightM || !qty) return 0;
-      const area = Math.PI * Math.pow(pipeM / 2, 2);
-      return area * heightM * density * qty;
-    }
-
-    if (lengthM && widthM && thicknessM && qty) {
-      return lengthM * widthM * thicknessM * density * qty;
-    }
-
-    return 0;
-  };
-
-  const totalSteelWeight = Object.entries(templateValues).reduce((sum, [key, values]) => {
-    const item = counterTypeMaterialTemplates[projectData.customerId]?.find(i => i.key === key);
-    if (!item) return sum;
-    return sum + getSteelWeightForTemplateItem(item, values);
-  }, 0);
-
-  // Run calculations whenever list or summary costs change
-  const materialTotal = selectedMaterialsList.reduce((sum, item) => sum + (item.total || 0), 0);
-  const labourCostVal = Number(projectData.labourCost) || 0;
-  const transportCostVal = Number(projectData.transportCost) || 0;
-  const discountVal = Number(projectData.discount) || 0;
-  const gstPercent = Number(projectData.gst) || 0;
-
-  // Calculation formula:
-  // Taxable subtotal = Material Total + Labour + Transport - Discount
-  // GST Amount = Taxable Subtotal * (GST % / 100)
-  // Grand Total = Taxable Subtotal + GST Amount
-  const taxableSubtotal = Math.max(0, materialTotal + labourCostVal + transportCostVal - discountVal);
-  // Special check: if the user needs GST to match the Module 7 exactly, we'll keep the dynamic calculation:
-  const gstAmount = Math.round(taxableSubtotal * (gstPercent / 100));
-  const grandTotal = taxableSubtotal + gstAmount;
-
-  const handleRowChange = (index, field, value) => {
-    const updated = [...selectedMaterialsList];
-    
-    if (field === 'materialId') {
-      const mat = materials.find(m => m._id === value);
-      updated[index].materialId = value;
-      updated[index].unitPrice = mat ? mat.price : 0;
-      updated[index].unit = mat ? mat.unit : '';
-      updated[index].total = updated[index].quantity * (mat ? mat.price : 0);
-    } else if (field === 'quantity') {
-      const q = value === '' ? '' : (parseFloat(value) || 0);
-      updated[index].quantity = q;
-      const numQ = parseFloat(q) || 0;
-      updated[index].total = Number((numQ * (parseFloat(updated[index].unitPrice) || 0)).toFixed(2));
-    } else if (field === 'unitPrice') {
-      const p = value === '' ? '' : (parseFloat(value) || 0);
-      updated[index].unitPrice = p;
-      const numP = parseFloat(p) || 0;
-      updated[index].total = Number(((parseFloat(updated[index].quantity) || 0) * numP).toFixed(2));
-    }
-
-    setSelectedMaterialsList(updated);
-  };
-
-  const handleAddRow = () => {
-    setSelectedMaterialsList([
-      ...selectedMaterialsList,
-      { materialId: '', quantity: 1, unitPrice: 0, unit: '', total: 0 }
-    ]);
-  };
-
-  const handleRemoveRow = (index) => {
-    if (selectedMaterialsList.length === 1) return;
-    const updated = selectedMaterialsList.filter((_, i) => i !== index);
-    setSelectedMaterialsList(updated);
-  };
-
-  const updateTemplateValue = (itemKey, field, value, dimName) => {
-    setTemplateValues((prev) => {
-      const existing = prev[itemKey] || { quantity: '', pipeSize: '', noOfLegs: '', dims: {} };
-      if (field === 'quantity' || field === 'pipeSize' || field === 'noOfLegs') {
-        return {
-          ...prev,
-          [itemKey]: {
-            ...existing,
-            [field]: value
-          }
-        };
-      }
-
-      return {
-        ...prev,
-        [itemKey]: {
-          ...existing,
-          dims: {
-            ...existing.dims,
-            [dimName]: value
-          }
-        }
-      };
+  // Sheet Row Handlers
+  const updateSheetRow = (index, field, value) => {
+    setSheets(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
     });
   };
 
-  // QUICK ADD CUSTOMER SUBMISSION
-  const handleQuickCustomerSubmit = async (e) => {
-    e.preventDefault();
-    const errors = {};
-    if (!custFormData.customerName.trim()) errors.customerName = 'Name is required';
-    if (!custFormData.counterType.trim()) errors.counterType = 'Counter Type is required';
-    if (!custFormData.phone.trim()) errors.phone = 'Phone is required';
-    if (!custFormData.address.trim()) errors.address = 'Address is required';
-    
-    if (Object.keys(errors).length > 0) {
-      setCustErrors(errors);
-      return;
-    }
+  const deleteSheetRow = (index) => {
+    setSheets(prev => prev.filter((_, i) => i !== index));
+  };
 
-    try {
-      setLoading(true);
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(custFormData)
-      });
-      if (res.ok) {
-        const newCust = await res.json();
-        setCustomers([...customers, newCust]);
-        setProjectData({ ...projectData, customerId: newCust._id });
-        setIsCustModalOpen(false);
-      } else {
-        alert('Failed to save customer');
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+  // Pipe Row Handlers
+  const updatePipeRow = (index, field, value) => {
+    setPipes(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const deletePipeRow = (index) => {
+    setPipes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Purchased Row Handlers
+  const updatePurchasedRow = (index, field, value) => {
+    setPurchased(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const deletePurchasedRow = (index) => {
+    setPurchased(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Add New Custom Material Row
+  const handleAddNewMaterial = (type) => {
+    setIsAddMaterialModalOpen(false);
+    const newId = `custom-${Date.now()}`;
+    if (type === 'SHEET') {
+      setSheets(prev => [
+        ...prev,
+        { id: newId, material: '', calculationType: 'sheet', grade: 'SS304', length: '', width: '', gauge: '', quantity: '', unit: 'inch' }
+      ]);
+    } else if (type === 'PIPE') {
+      setPipes(prev => [
+        ...prev,
+        { id: newId, material: '', calculationType: 'pipe', grade: 'SS304', pipeSize: '', length: '', quantity: '' }
+      ]);
+    } else if (type === 'PURCHASED') {
+      setPurchased(prev => [
+        ...prev,
+        { id: newId, material: '', calculationType: 'purchased', quantity: '', unitWeight: '' }
+      ]);
     }
   };
 
-  // SAVE ESTIMATE TO DATABASE
-  const handleSaveEstimate = async () => {
-    if (!projectData.projectName.trim()) {
-      showStatus('warning', 'Project Name is required.');
-      return;
-    }
-    if (!projectData.customerId) {
-      showStatus('warning', 'Please select a counter type.');
-      return;
-    }
+  // Action: + New Counter
+  const handleResetNewCounter = () => {
+    setClientData({
+      customerName: '',
+      companyName: '',
+      phone: '',
+      email: '',
+      counterType: '',
+      estimateNumber: `EST-${Date.now().toString().slice(-6)}`,
+      date: new Date().toISOString().split('T')[0]
+    });
+    setSheets([]);
+    setPipes([]);
+    setPurchased([]);
+    setPricingInputs({
+      materialRate: '',
+      labourCost: '',
+      gst: String(DEFAULT_GST_PERCENT),
+      discount: ''
+    });
+    setCurrentStep(1);
+    showStatus('success', 'Reset workspace for a New Counter Estimate.');
+  };
 
-    const isAutoSpec = Boolean(counterTypeMaterialTemplates[projectData.customerId]);
-    if (!isAutoSpec && selectedMaterialsList.some(item => !item.materialId)) {
-      showStatus('warning', 'Please select a valid material for all rows.');
+  // Action: Save Project
+  const handleSaveProject = async () => {
+    if (!clientData.customerName.trim()) {
+      showStatus('warning', 'Please provide a Customer Name.');
+      setCurrentStep(1);
+      return;
+    }
+    if (!clientData.counterType) {
+      showStatus('warning', 'Please select a Counter Type in Step 1.');
+      setCurrentStep(1);
       return;
     }
 
     try {
       setLoading(true);
-      const materialsList = isAutoSpec
-        ? Object.entries(templateValues).map(([key, value]) => ({
-            materialId: key,
-            quantity: Number(value.quantity || 0),
-            unitPrice: 0,
-            total: 0
-          }))
-        : selectedMaterialsList.map(m => ({
-            materialId: m.materialId,
-            quantity: m.quantity,
-            unitPrice: m.unitPrice,
-            total: m.total
-          }));
-
       const payload = {
         projectData: {
-          ...projectData,
-          totalAmount: grandTotal,
-          labourCost: labourCostVal,
-          transportCost: transportCostVal,
-          discount: discountVal
-        },
-        materialsList
+          estimateNumber: clientData.estimateNumber,
+          projectName: `${clientData.counterType} - ${clientData.customerName}`,
+          customerName: clientData.customerName,
+          companyName: clientData.companyName,
+          phone: clientData.phone,
+          email: clientData.email,
+          counterType: clientData.counterType,
+          date: clientData.date,
+          sheets,
+          pipes,
+          purchased,
+          materialRate: parseFloat(pricingInputs.materialRate) || 0,
+          labourCost: parseFloat(pricingInputs.labourCost) || 0,
+          discount: parseFloat(pricingInputs.discount) || 0,
+          gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
+          totalMaterialWeight: calculation.totalWeight,
+          materialCost: calculation.materialCost,
+          subtotal: calculation.subtotal,
+          taxableAmount: calculation.taxableAmount,
+          gstAmount: calculation.gstAmount,
+          totalAmount: calculation.grandTotal,
+          grandTotal: calculation.grandTotal
+        }
       };
 
-      let res;
-      if (projectToEdit) {
-        res = await fetch('/api/projects', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: projectToEdit._id, ...payload })
-        });
-      } else {
-        res = await fetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
+      const endpoint = '/api/projects';
+      const method = projectToEdit ? 'PUT' : 'POST';
+      const body = projectToEdit ? JSON.stringify({ id: projectToEdit._id, ...payload }) : JSON.stringify(payload);
+
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
 
       if (res.ok) {
-        showStatus('success', projectToEdit ? 'Estimate updated successfully!' : 'Estimate saved successfully!');
+        showStatus('success', projectToEdit ? 'Project updated successfully!' : 'Project saved successfully!');
         if (onSaveSuccess) {
-          setTimeout(() => onSaveSuccess(), 1500);
+          setTimeout(() => onSaveSuccess(), 1000);
         }
       } else {
         const err = await res.json();
@@ -376,708 +280,865 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       }
     } catch (e) {
       console.error(e);
-      showStatus('error', 'Network error. Could not connect to API.');
+      showStatus('error', 'Network error. Could not connect to database.');
     } finally {
       setLoading(false);
     }
   };
 
-  // PDF GENERATION WITH jspdf & jspdf-autotable
-  const handleGeneratePDF = (shouldPrint = false) => {
-    const selectedCounterType = projectData.customerId;
-    if (!projectData.projectName.trim() || !selectedCounterType) {
-      showStatus('warning', 'Ensure Project Name and Counter Type are selected to generate PDF.');
+  // Action: Generate Estimate (Download PDF)
+  const handleGeneratePDF = () => {
+    if (!clientData.customerName.trim()) {
+      showStatus('warning', 'Please provide a Customer Name in Step 1.');
+      setCurrentStep(1);
+      return;
+    }
+    if (!clientData.counterType) {
+      showStatus('warning', 'Please select a Counter Type in Step 1.');
+      setCurrentStep(1);
       return;
     }
 
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    try {
+      generateQuotationPDF({
+        ...clientData,
+        sheets,
+        pipes,
+        purchased,
+        materialRate: parseFloat(pricingInputs.materialRate) || 0,
+        labourCost: parseFloat(pricingInputs.labourCost) || 0,
+        discount: parseFloat(pricingInputs.discount) || 0,
+        gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
+        totalMaterialWeight: calculation.totalWeight
+      }, { shouldPrint: false });
+      showStatus('success', 'Quotation PDF generated and downloaded.');
+    } catch (e) {
+      console.error('PDF Generation Error:', e);
+      showStatus('error', 'Failed to generate PDF quotation.');
+    }
+  };
 
-    // 1. Header (Commercial Quotation styling)
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 210, 40, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.text('ABC FABRICATION', 14, 16);
-    
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('Industrial & Structural Metal Fabricators', 14, 22);
-    doc.text('Phone: +91 98765 43210 | Email: billing@abcfab.com', 14, 27);
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('COMMERCIAL QUOTATION', 130, 20);
-
-    // 2. Billing & Client Data Details
-    doc.setTextColor(15, 23, 42); // slate-900
-    doc.setFontSize(10);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('CLIENT DETAILS', 14, 52);
-    
-    doc.setFont('Helvetica', 'normal');
-    doc.setTextColor(71, 85, 105); // slate-600
-    doc.text(`Counter Type: ${selectedCounterType}`, 14, 58);
-
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    doc.text('QUOTATION DETAILS', 130, 52);
-    
-    doc.setFont('Helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text(`Project Name: ${projectData.projectName}`, 130, 58);
-    doc.text(`Date: ${projectData.date}`, 130, 63);
-    doc.text(`Quotation ID: QT-${Date.now().toString().slice(-6)}`, 130, 68);
-
-    // Divider Line
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.line(14, 78, 196, 78);
-
-    // 3. Materials Table (Using autoTable)
-    const tableHeaders = [['#', 'Material Description', 'Quantity', 'Unit', 'Rate', 'Amount']];
-    const tableRows = selectedMaterialsList.map((item, idx) => {
-      const mat = materials.find(m => m._id === item.materialId);
-      return [
-        idx + 1,
-        mat ? mat.materialName : 'Custom Material',
-        item.quantity,
-        item.unit || 'Kg',
-        `Rs. ${item.unitPrice.toLocaleString('en-IN')}`,
-        `Rs. ${item.total.toLocaleString('en-IN')}`
-      ];
-    });
-
-    doc.autoTable({
-      startY: 84,
-      head: tableHeaders,
-      body: tableRows,
-      theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
-      columnStyles: {
-        0: { width: 10, halign: 'center' },
-        1: { width: 70 },
-        2: { width: 25, halign: 'right' },
-        3: { width: 20, halign: 'center' },
-        4: { width: 30, halign: 'right' },
-        5: { width: 30, halign: 'right' }
-      },
-      styles: { fontSize: 9, cellPadding: 3 },
-      margin: { left: 14, right: 14 }
-    });
-
-    // 4. Quotation Summary Details (Aligned on right side below table)
-    const finalY = doc.lastAutoTable.finalY + 10;
-    
-    // Remarks Box on Left
-    if (projectData.remarks) {
-      doc.setFillColor(248, 250, 252); // slate-50
-      doc.rect(14, finalY, 95, 38, 'F');
-      doc.setDrawColor(226, 232, 240);
-      doc.rect(14, finalY, 95, 38, 'S');
-      
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.text('Terms & Remarks:', 18, finalY + 6);
-      
-      doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      const splitRemarks = doc.splitTextToSize(projectData.remarks, 85);
-      doc.text(splitRemarks, 18, finalY + 12);
+  // Action: Print
+  const handlePrintQuotation = () => {
+    if (!clientData.customerName.trim()) {
+      showStatus('warning', 'Please provide a Customer Name in Step 1.');
+      setCurrentStep(1);
+      return;
+    }
+    if (!clientData.counterType) {
+      showStatus('warning', 'Please select a Counter Type in Step 1.');
+      setCurrentStep(1);
+      return;
     }
 
-    // Cost Breakdown on Right
-    doc.setTextColor(71, 85, 105);
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9.5);
-    
-    let currentY = finalY + 5;
-    const addSummaryRow = (label, value, isBold = false) => {
-      if (isBold) {
-        doc.setFont('Helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
-      } else {
-        doc.setFont('Helvetica', 'normal');
-        doc.setTextColor(71, 85, 105);
-      }
-      doc.text(label, 130, currentY);
-      doc.text(value, 196, currentY, { align: 'right' });
-      currentY += 6;
-    };
-
-    addSummaryRow('Material Total:', `Rs. ${materialTotal.toLocaleString('en-IN')}`);
-    addSummaryRow('Labour Cost:', `Rs. ${labourCostVal.toLocaleString('en-IN')}`);
-    if (transportCostVal > 0) addSummaryRow('Transport Cost:', `Rs. ${transportCostVal.toLocaleString('en-IN')}`);
-    if (discountVal > 0) addSummaryRow('Discount:', `- Rs. ${discountVal.toLocaleString('en-IN')}`);
-    if (gstPercent > 0) addSummaryRow(`GST (${gstPercent}%):`, `Rs. ${gstAmount.toLocaleString('en-IN')}`);
-    
-    // Line before grand total
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(0.5);
-    doc.line(130, currentY, 196, currentY);
-    currentY += 6;
-    
-    addSummaryRow('Grand Total:', `Rs. ${grandTotal.toLocaleString('en-IN')}`, true);
-
-    // Signatures / Footer at very bottom
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text('This is a computer generated quotation and requires no physical signatures.', 14, 280);
-
-    if (shouldPrint) {
-      doc.autoPrint();
-      window.open(doc.output('bloburl'), '_blank');
-    } else {
-      doc.save(`Quotation_${projectData.projectName.replace(/\s+/g, '_')}.pdf`);
-      showStatus('success', 'PDF downloaded successfully!');
+    try {
+      generateQuotationPDF({
+        ...clientData,
+        sheets,
+        pipes,
+        purchased,
+        materialRate: parseFloat(pricingInputs.materialRate) || 0,
+        labourCost: parseFloat(pricingInputs.labourCost) || 0,
+        discount: parseFloat(pricingInputs.discount) || 0,
+        gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
+        totalMaterialWeight: calculation.totalWeight
+      }, { shouldPrint: true });
+    } catch (e) {
+      console.error('Print Error:', e);
+      showStatus('error', 'Failed to trigger print quotation.');
     }
   };
 
   const showStatus = (type, message) => {
     setStatusMessage({ type, text: message });
-    setTimeout(() => setStatusMessage(null), 5000);
+    setTimeout(() => setStatusMessage(null), 3500);
   };
 
-  if (initialLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-950 text-slate-400">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-4" />
-        <p className="text-sm font-medium tracking-wide">Loading workspace elements...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 bg-slate-950 p-8 overflow-y-auto relative">
-      {/* Status Notifications */}
+    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-36 text-slate-800">
+      {/* Toast Notification */}
       {statusMessage && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl border shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 ${
-          statusMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' :
-          statusMessage.type === 'warning' ? 'bg-amber-500/10 border-amber-500 text-amber-400' :
-          'bg-red-500/10 border-red-500 text-red-400'
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl border shadow-xl animate-in fade-in slide-in-from-top-4 duration-200 ${
+          statusMessage.type === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
+          statusMessage.type === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' :
+          'bg-rose-50 border-rose-300 text-rose-800'
         }`}>
-          {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-          <span className="text-sm font-semibold">{statusMessage.text}</span>
+          {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" /> : <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />}
+          <span className="text-xs font-bold">{statusMessage.text}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            {projectToEdit ? 'Edit Cost Estimation' : 'New Cost Estimation'}
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            {projectToEdit ? 'Edit Estimate' : 'Estimate Builder'}
           </h1>
-          <p className="text-slate-400 text-sm">Select materials and build real-time quotations</p>
+          <p className="text-xs text-slate-500 font-medium">Shree Balaji Enterprises • Kitchen Equipment Cost Estimation</p>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Global Action Buttons */}
+        <div className="flex items-center flex-wrap gap-2.5">
           <button
-            onClick={() => handleGeneratePDF(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-semibold text-sm transition-all"
+            onClick={handleResetNewCounter}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all shadow-sm"
+            title="Clear and start a new estimate"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+            + New Counter
+          </button>
+          <button
+            onClick={handlePrintQuotation}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all shadow-sm"
             title="Print Quotation"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
             Print
           </button>
           <button
-            onClick={() => handleGeneratePDF(false)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-semibold text-sm transition-all"
-            title="Download PDF Invoice"
+            onClick={handleGeneratePDF}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-all shadow-sm"
+            title="Download Quotation PDF"
           >
-            <Download className="w-4 h-4" />
-            Download PDF
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            Generate Estimate
           </button>
           <button
-            onClick={handleSaveEstimate}
+            onClick={handleSaveProject}
             disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs transition-all shadow-sm"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             {projectToEdit ? 'Update Project' : 'Save Project'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Form Area */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Client Data */}
-          <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
-            <h3 className="text-white font-bold text-base mb-4 border-b border-slate-800 pb-2">1. Client Data</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Client Name */}
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Client Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Shed Extension Structure"
-                  value={projectData.projectName}
-                  onChange={(e) => setProjectData({ ...projectData, projectName: e.target.value })}
-                  className="w-full bg-slate-950 text-white px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm transition-all"
-                />
-              </div>
-
-              {/* Counter Type Dropdown */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Counter Type *</label>
-                  <button
-                    onClick={() => setIsCustModalOpen(true)}
-                    className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold uppercase tracking-wider"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    + New Customer
-                  </button>
-                </div>
-                <select
-                  value={projectData.customerId}
-                  onChange={(e) => setProjectData({ ...projectData, customerId: e.target.value })}
-                  className="w-full bg-slate-950 text-white px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm"
-                >
-                  <option value="">-- Select Counter Type --</option>
-                  {counterTypeOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                  {projectData.customerId && !counterTypeOptions.includes(projectData.customerId) && (
-                    <option value={projectData.customerId} hidden>{customers.find(c => c._id === projectData.customerId)?.counterType || customers.find(c => c._id === projectData.customerId)?.customerName || projectData.customerId}</option>
-                  )}
-                </select>
-              </div>
-
-              {/* Date */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Date *</label>
-                <input
-                  type="date"
-                  value={projectData.date}
-                  onChange={(e) => setProjectData({ ...projectData, date: e.target.value })}
-                  className="w-full bg-slate-950 text-white px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm"
-                />
-              </div>
-
-              {/* Remarks */}
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Remarks / Notes</label>
-                <textarea
-                  rows="3"
-                  placeholder="Enter specifications, site notes, or instructions..."
-                  value={projectData.remarks}
-                  onChange={(e) => setProjectData({ ...projectData, remarks: e.target.value })}
-                  className="w-full bg-slate-950 text-white px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm resize-none"
-                />
-              </div>
+      {/* Exactly 3 Steps Navigation Wizard */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { step: 1, label: 'Step 1', name: 'Client Data' },
+          { step: 2, label: 'Step 2', name: 'Material Specification' },
+          { step: 3, label: 'Step 3', name: 'Weight Summary' }
+        ].map((s) => (
+          <button
+            key={s.step}
+            onClick={() => setCurrentStep(s.step)}
+            className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border transition-all duration-150 text-left ${
+              currentStep === s.step
+                ? 'bg-white border-emerald-500 ring-2 ring-emerald-500/10 shadow-sm'
+                : 'bg-white/70 border-slate-200 hover:bg-white hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <span className={`text-[11px] font-bold uppercase tracking-wider block ${currentStep === s.step ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {s.label}
+              </span>
+              <span className="text-xs md:text-sm font-bold text-slate-800 block mt-0.5">
+                {s.name}
+              </span>
             </div>
-          </div>
-
-          {/* Estimate Builder Table */}
-          <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-              <h3 className="text-white font-bold text-base">2. Material Specifications</h3>
-              <div className="rounded-full border border-slate-700 px-3 py-1 text-slate-300 text-xs font-semibold uppercase tracking-wider">
-                Auto-generated from Counter Type
-              </div>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-2 md:mt-0 ${
+              currentStep === s.step ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}>
+              {s.step}
             </div>
-
-
-            {counterTypeMaterialTemplates[projectData.customerId] ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/50">
-                <table className="min-w-full border-separate border-spacing-0 text-sm text-left">
-                  <thead className="sticky top-0 bg-slate-900 text-slate-300">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Material Component</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Length</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Width</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Height</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Thickness</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Pipe Size</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">No. of Legs</th>
-                      <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider border-b border-slate-800">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {counterTypeMaterialTemplates[projectData.customerId].map((item, index) => (
-                      <tr key={item.key} className={index % 2 === 0 ? 'bg-slate-950/70 hover:bg-slate-950' : 'bg-slate-950/40 hover:bg-slate-950'}>
-                        <td className="px-4 py-4 text-white border-b border-slate-800">{item.name}</td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.length ? (
-                            <input
-                              type="number"
-                              step="any"
-                              inputMode="decimal"
-                              value={templateValues[item.key]?.dims?.length || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'length')}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.width ? (
-                            <input
-                              type="number"
-                              step="any"
-                              inputMode="decimal"
-                              value={templateValues[item.key]?.dims?.width || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'width')}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.height ? (
-                            <input
-                              type="number"
-                              step="any"
-                              inputMode="decimal"
-                              value={templateValues[item.key]?.dims?.height || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'height')}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.thickness ? (
-                            <input
-                              type="number"
-                              step="any"
-                              inputMode="decimal"
-                              value={templateValues[item.key]?.dims?.thickness || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'dim', e.target.value, 'thickness')}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.pipeSize ? (
-                            <input
-                              type="text"
-                              value={templateValues[item.key]?.pipeSize || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'pipeSize', e.target.value)}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.noOfLegs ? (
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={templateValues[item.key]?.noOfLegs || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'noOfLegs', e.target.value)}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 border-b border-slate-800">
-                          {item.fields.qty ? (
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={templateValues[item.key]?.quantity || ''}
-                              onChange={(e) => updateTemplateValue(item.key, 'quantity', e.target.value)}
-                              className="w-full bg-slate-950 text-white px-3 py-2 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs"
-                            />
-                          ) : (
-                            <span className="text-slate-500">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-slate-400 text-sm">
-                Select a counter type to automatically load the Material Specification.
-              </div>
-            )}
-
-            {!counterTypeMaterialTemplates[projectData.customerId] && (
-              <div className="space-y-4">
-                {selectedMaterialsList.map((row, index) => (
-                  <div 
-                    key={index} 
-                    className="flex flex-col md:flex-row md:items-end gap-3 p-4 bg-slate-950/40 border border-slate-800/50 rounded-xl relative group hover:border-slate-700/50 transition-all duration-300"
-                  >
-                    {/* Remove Button for row */}
-                    <button
-                      onClick={() => handleRemoveRow(index)}
-                      disabled={selectedMaterialsList.length === 1}
-                      className="absolute top-3 right-3 md:relative md:top-0 md:right-0 p-2 text-slate-500 hover:text-red-400 disabled:opacity-30 rounded-lg hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-4.5 h-4.5" />
-                    </button>
-
-                    {/* Material Selection */}
-                    <div className="flex-1">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Material</label>
-                      <select
-                        value={row.materialId}
-                        onChange={(e) => handleRowChange(index, 'materialId', e.target.value)}
-                        className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
-                      >
-                        <option value="">-- Choose Material --</option>
-                        {materials.map(m => (
-                          <option key={m._id} value={m._id}>{m.materialName} ({m.unit})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Quantity Input */}
-                    <div className="w-full md:w-28">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Quantity</label>
-                      <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pr-2">
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder="Qty"
-                          value={row.quantity}
-                          onChange={(e) => handleRowChange(index, 'quantity', e.target.value)}
-                          className="w-full bg-transparent text-white px-3 py-2.5 focus:outline-none text-xs text-right font-semibold no-spinner"
-                        />
-                        <span className="text-[10px] text-slate-500 font-bold shrink-0">{row.unit || '-'}</span>
-                      </div>
-                    </div>
-
-                    {/* Rate Input */}
-                    <div className="w-full md:w-32">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 md:hidden">Rate (₹)</label>
-                      <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 focus-within:border-emerald-500 overflow-hidden pl-2">
-                        <span className="text-xs text-slate-500 shrink-0 font-bold">₹</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Rate"
-                          value={row.unitPrice}
-                          onChange={(e) => handleRowChange(index, 'unitPrice', e.target.value)}
-                          className="w-full bg-transparent text-white px-2 py-2.5 focus:outline-none text-xs font-semibold"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Line Total */}
-                    <div className="w-full md:w-36 text-right pb-1">
-                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 text-left md:text-right">Line Total</span>
-                      <span className="text-sm font-bold text-emerald-400 block pr-2">
-                        ₹{row.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Cost Summary & Actions Area */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6 sticky top-8">
-            <h3 className="text-white font-bold text-base mb-4 border-b border-slate-800 pb-2">3. Cost Summary</h3>
-            <div className="space-y-4">
-              {/* Material Total */}
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400 font-medium">Material Total</span>
-                <span className="text-white font-bold">₹{materialTotal.toLocaleString('en-IN')}</span>
-              </div>
-
-              {/* Labour Cost */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm text-slate-400 font-medium">Labour Cost (₹)</label>
-                </div>
-                <input
-                  type="number"
-                  placeholder="Enter labour amount"
-                  value={projectData.labourCost || ''}
-                  onChange={(e) => setProjectData({ ...projectData, labourCost: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm font-semibold text-right"
-                />
-              </div>
-
-              {/* Transport Cost */}
-              <div>
-                <label className="text-sm text-slate-400 font-medium block mb-2">Transport Cost (₹)</label>
-                <input
-                  type="number"
-                  placeholder="Optional delivery costs"
-                  value={projectData.transportCost || ''}
-                  onChange={(e) => setProjectData({ ...projectData, transportCost: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm font-semibold text-right"
-                />
-              </div>
-
-              {/* Discount Cost */}
-              <div>
-                <label className="text-sm text-slate-400 font-medium block mb-2">Discount (₹)</label>
-                <input
-                  type="number"
-                  placeholder="Optional deduction amount"
-                  value={projectData.discount || ''}
-                  onChange={(e) => setProjectData({ ...projectData, discount: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm font-semibold text-right"
-                />
-              </div>
-
-              {/* Steel Weight */}
-              <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-slate-400 text-sm uppercase tracking-wider">Steel Weight</p>
-                    <p className="text-white text-lg font-bold">{totalSteelWeight.toFixed(2)} kg</p>
-                  </div>
-                  <div className="text-slate-400 text-xs">Automatically calculated from component dimensions</div>
-                </div>
-              </div>
-
-              {/* GST Percent */}
-              <div>
-                <label className="text-sm text-slate-400 font-medium block mb-2">GST Tax Rate (%)</label>
-                <input
-                  type="number"
-                  placeholder="18"
-                  value={projectData.gst}
-                  onChange={(e) => setProjectData({ ...projectData, gst: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm font-semibold text-right"
-                />
-              </div>
-
-              <hr className="border-slate-800 my-2" />
-
-              {/* GST Calculation Display */}
-              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Taxable Subtotal</span>
-                <span>₹{taxableSubtotal.toLocaleString('en-IN')}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Calculated GST ({gstPercent}%)</span>
-                <span>₹{gstAmount.toLocaleString('en-IN')}</span>
-              </div>
-
-              <hr className="border-slate-800 my-2" />
-
-              {/* Grand Total */}
-              <div className="flex items-center justify-between">
-                <span className="text-white font-bold text-base">Grand Total</span>
-                <span className="text-xl font-black text-emerald-400">
-                  ₹{grandTotal.toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+          </button>
+        ))}
       </div>
 
-      {/* Quick Add Customer Modal */}
-      {isCustModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-800">
-              <h2 className="text-base font-bold text-white">Create New Customer</h2>
-              <button
-                onClick={() => setIsCustModalOpen(false)}
-                className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* ========================================================================= */}
+      {/* STEP 1 — CLIENT DATA */}
+      {/* ========================================================================= */}
+      {currentStep === 1 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 lg:p-8 shadow-sm space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Step 1 — Client Data</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Customer Name */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Customer Name *
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Customer Name"
+                value={clientData.customerName}
+                onChange={(e) => setClientData({ ...clientData, customerName: e.target.value })}
+                className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs font-semibold"
+              />
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleQuickCustomerSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Customer Name *</label>
-                <input
-                  type="text"
-                  placeholder="Company name or person..."
-                  value={custFormData.customerName}
-                  onChange={(e) => setCustFormData({ ...custFormData, customerName: e.target.value })}
-                  className={`w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border ${
-                    custErrors.customerName ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
-                  } focus:outline-none text-xs`}
-                />
-              </div>
+            {/* Company Name */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Company Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Company Name"
+                value={clientData.companyName}
+                onChange={(e) => setClientData({ ...clientData, companyName: e.target.value })}
+                className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs"
+              />
+            </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Counter Type *</label>
-                <select
-                  value={custFormData.counterType}
-                  onChange={(e) => setCustFormData({ ...custFormData, counterType: e.target.value })}
-                  className={`w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border ${
-                    custErrors.counterType ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
-                  } focus:outline-none text-xs`}
-                >
-                  <option value="">-- Select Counter Type --</option>
-                  {counterTypeOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                {custErrors.counterType && (
-                  <p className="text-red-400 text-[10px] mt-1.5 font-medium">{custErrors.counterType}</p>
+            {/* Phone */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Phone
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Phone Number"
+                value={clientData.phone}
+                onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
+                className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs"
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Email
+              </label>
+              <input
+                type="email"
+                placeholder="Enter Email Address"
+                value={clientData.email}
+                onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
+                className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs"
+              />
+            </div>
+
+            {/* Counter Type (REQUIRED DROPDOWN) */}
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
+                Counter Type *
+              </label>
+              <select
+                value={clientData.counterType}
+                onChange={(e) => handleCounterTypeChange(e.target.value)}
+                className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-lg border border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-xs font-bold"
+              >
+                <option value="">-- Select Counter Type --</option>
+                {COUNTER_TYPES.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Stepper Proceed Button */}
+          <div className="flex justify-end pt-4 border-t border-slate-100">
+            <button
+              onClick={() => setCurrentStep(2)}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm"
+            >
+              Proceed to Material Specification
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* STEP 2 — MATERIAL SPECIFICATION */}
+      {/* ========================================================================= */}
+      {currentStep === 2 && (
+        <div className="space-y-6 w-full">
+          {/* Header Action Bar */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Step 2 — Material Specification</h2>
+              {clientData.counterType && (
+                <span className="text-xs text-emerald-700 font-bold mt-0.5 inline-block">
+                  {clientData.counterType}
+                </span>
+              )}
+            </div>
+
+            {clientData.counterType && (
+              <button
+                onClick={() => setIsAddMaterialModalOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                + New Material
+              </button>
+            )}
+          </div>
+
+          {/* Prompt if No Counter Type Selected */}
+          {!clientData.counterType ? (
+            <div className="bg-white border border-slate-200 rounded-xl py-20 px-6 text-center shadow-sm">
+              <p className="text-slate-500 text-xs font-semibold">
+                Please select a Counter Type in Step 1 (Client Data) to load the Material Specification.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* 1. SHEET MATERIALS TABLE */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-full">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Sheet Materials</h3>
+                  </div>
+                  <span className="text-xs text-slate-400 font-semibold">{sheets.length} component(s)</span>
+                </div>
+
+                {sheets.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-3 text-center">No sheet components configured.</p>
+                ) : (
+                  <div className="w-full overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
+                          <th className="py-2.5 px-3">Material</th>
+                          <th className="py-2.5 px-3 w-28">Grade</th>
+                          <th className="py-2.5 px-3 w-24">Length</th>
+                          <th className="py-2.5 px-3 w-24">Width</th>
+                          <th className="py-2.5 px-3 w-28">Gauge</th>
+                          <th className="py-2.5 px-3 w-20">Quantity</th>
+                          <th className="py-2.5 px-3 text-center w-16">Unit</th>
+                          <th className="py-2.5 px-3 text-right w-28">Weight</th>
+                          <th className="py-2.5 px-2 text-center w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
+                        {sheets.map((row, idx) => {
+                          const rowWeight = calculateRowWeight(row);
+                          return (
+                            <tr key={row.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-2 px-3">
+                                <input
+                                  type="text"
+                                  placeholder="Material Name"
+                                  value={row.material || ''}
+                                  onChange={(e) => updateSheetRow(idx, 'material', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2.5 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3">
+                                <select
+                                  value={row.grade || 'SS304'}
+                                  onChange={(e) => updateSheetRow(idx, 'grade', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                >
+                                  {STAINLESS_STEEL_GRADES.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="Length"
+                                  value={row.length !== undefined && row.length !== null ? row.length : ''}
+                                  onChange={(e) => updateSheetRow(idx, 'length', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-right font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="Width"
+                                  value={row.width !== undefined && row.width !== null ? row.width : ''}
+                                  onChange={(e) => updateSheetRow(idx, 'width', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-right font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3">
+                                <select
+                                  value={row.gauge !== undefined && row.gauge !== '' ? row.gauge : ''}
+                                  onChange={(e) => updateSheetRow(idx, 'gauge', e.target.value ? parseFloat(e.target.value) : '')}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                >
+                                  <option value="">Select Gauge</option>
+                                  {STANDARD_GAUGES.map(g => (
+                                    <option key={g.value} value={g.value}>{g.label}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  placeholder="Quantity"
+                                  value={row.quantity !== undefined && row.quantity !== null ? row.quantity : ''}
+                                  onChange={(e) => updateSheetRow(idx, 'quantity', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-right font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-center text-slate-500 font-bold">
+                                inch
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-emerald-700">
+                                {formatWeight(rowWeight)}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  onClick={() => deleteSheetRow(idx)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                                  title="Remove Row"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="Optional email..."
-                  value={custFormData.email}
-                  onChange={(e) => setCustFormData({ ...custFormData, email: e.target.value })}
-                  className="w-full bg-slate-950 text-white px-3 py-2.5 border border-slate-800 focus:border-emerald-500 focus:outline-none text-xs rounded-xl"
-                />
+              {/* 2. PIPE MATERIALS TABLE */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-full">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-cyan-600"></div>
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pipe Materials</h3>
+                  </div>
+                  <span className="text-xs text-slate-400 font-semibold">{pipes.length} component(s)</span>
+                </div>
+
+                {pipes.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-3 text-center">No pipe components configured.</p>
+                ) : (
+                  <div className="w-full overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
+                          <th className="py-2.5 px-3">Material</th>
+                          <th className="py-2.5 px-3 w-28">Grade</th>
+                          <th className="py-2.5 px-3 w-48">Pipe Size</th>
+                          <th className="py-2.5 px-3 w-28 text-right">Length (ft)</th>
+                          <th className="py-2.5 px-3 w-24 text-right">Quantity</th>
+                          <th className="py-2.5 px-3 text-right w-28">Weight</th>
+                          <th className="py-2.5 px-2 text-center w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
+                        {pipes.map((row, idx) => {
+                          const rowWeight = calculateRowWeight(row);
+                          return (
+                            <tr key={row.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-2 px-3">
+                                <input
+                                  type="text"
+                                  placeholder="Material Name"
+                                  value={row.material || ''}
+                                  onChange={(e) => updatePipeRow(idx, 'material', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2.5 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3">
+                                <select
+                                  value={row.grade || 'SS304'}
+                                  onChange={(e) => updatePipeRow(idx, 'grade', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                >
+                                  {STAINLESS_STEEL_GRADES.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3">
+                                <select
+                                  value={row.pipeSize || ''}
+                                  onChange={(e) => updatePipeRow(idx, 'pipeSize', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                >
+                                  <option value="">Select Pipe Size</option>
+                                  {PIPE_MASTER.map(p => (
+                                    <option key={p.id} value={p.label}>{p.label}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="Length (ft)"
+                                  value={row.length !== undefined && row.length !== null ? row.length : ''}
+                                  onChange={(e) => updatePipeRow(idx, 'length', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-right font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  placeholder="Quantity"
+                                  value={row.quantity !== undefined && row.quantity !== null ? row.quantity : ''}
+                                  onChange={(e) => updatePipeRow(idx, 'quantity', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-right font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-cyan-700">
+                                {formatWeight(rowWeight)}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  onClick={() => deletePipeRow(idx)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                                  title="Remove Row"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Address *</label>
-                <textarea
-                  rows="2"
-                  placeholder="Billing address..."
-                  value={custFormData.address}
-                  onChange={(e) => setCustFormData({ ...custFormData, address: e.target.value })}
-                  className={`w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border ${
-                    custErrors.address ? 'border-red-500' : 'border-slate-800 focus:border-emerald-500'
-                  } focus:outline-none text-xs resize-none`}
-                />
+              {/* 3. PURCHASED ITEMS TABLE */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-full">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Purchased Items</h3>
+                  </div>
+                  <span className="text-xs text-slate-400 font-semibold">{purchased.length} component(s)</span>
+                </div>
+
+                {purchased.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-3 text-center">No purchased items configured.</p>
+                ) : (
+                  <div className="w-full overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
+                          <th className="py-2.5 px-3 text-left">Material</th>
+                          <th className="py-2.5 px-3 w-36 text-center">Quantity</th>
+                          <th className="py-2.5 px-3 w-44 text-center">Unit Weight (kg)</th>
+                          <th className="py-2.5 px-3 text-center w-44">Total Weight (kg)</th>
+                          <th className="py-2.5 px-2 text-center w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
+                        {purchased.map((row, idx) => {
+                          const purchasedWeight = calculatePurchasedItemWeight(row.quantity, row.unitWeight);
+                          const totalWeightDisplay = purchasedWeight !== null ? purchasedWeight.toFixed(2) : '—';
+
+                          return (
+                            <tr key={row.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-2 px-3 text-left">
+                                <input
+                                  type="text"
+                                  placeholder="Item Name"
+                                  value={row.material || ''}
+                                  onChange={(e) => updatePurchasedRow(idx, 'material', e.target.value)}
+                                  className="w-full bg-white text-slate-900 px-2.5 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  placeholder="Quantity"
+                                  value={row.quantity !== undefined && row.quantity !== null ? row.quantity : ''}
+                                  onChange={(e) => updatePurchasedRow(idx, 'quantity', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-center font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  placeholder="Unit Weight"
+                                  value={row.unitWeight !== undefined && row.unitWeight !== null ? row.unitWeight : ''}
+                                  onChange={(e) => updatePurchasedRow(idx, 'unitWeight', sanitizeNumericInput(e.target.value))}
+                                  className="w-full bg-white text-slate-900 px-2 py-1 rounded border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs text-center font-semibold"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-center font-bold text-amber-700">
+                                {totalWeightDisplay}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  onClick={() => deletePurchasedRow(idx)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                                  title="Remove Row"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Stepper Navigation */}
+          <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-8">
+            <button
+              onClick={() => setCurrentStep(1)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all shadow-sm cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Client Data
+            </button>
+            <button
+              onClick={() => setCurrentStep(3)}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm cursor-pointer"
+            >
+              Review Weight Summary
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* STEP 3 — WEIGHT SUMMARY & PRICING */}
+      {/* ========================================================================= */}
+      {currentStep === 3 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+          {/* Left Column: Weight Summary & Cost Inputs */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 lg:p-8 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-5">
+                Step 3 — Weight Summary
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Counter Type */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Counter Type</span>
+                  <span className="text-sm font-black text-slate-900">{clientData.counterType || 'N/A'}</span>
+                </div>
+
+                {/* Grand Total Material Weight */}
+                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block mb-1">Grand Total Material Weight</span>
+                  <span className="text-2xl font-black text-emerald-700">
+                    {calculation.totalWeight > 0 ? `${calculation.totalWeight.toFixed(2)} kg` : '—'}
+                  </span>
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              {/* Estimate Cost Summary Inputs */}
+              <div className="border-t border-slate-100 pt-6">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">
+                  Estimate Cost Summary
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Material Rate */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Material Rate (₹/kg)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="Enter Rate per Kg"
+                      value={pricingInputs.materialRate}
+                      onChange={(e) => setPricingInputs({ ...pricingInputs, materialRate: sanitizeNumericInput(e.target.value) })}
+                      className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs font-bold text-right"
+                    />
+                  </div>
+
+                  {/* Labour Cost */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Labour Cost (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="Enter Labour Cost"
+                      value={pricingInputs.labourCost}
+                      onChange={(e) => setPricingInputs({ ...pricingInputs, labourCost: sanitizeNumericInput(e.target.value) })}
+                      className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs font-bold text-right"
+                    />
+                  </div>
+
+                  {/* GST (%) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      GST (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      placeholder="18"
+                      value={pricingInputs.gst}
+                      onChange={(e) => setPricingInputs({ ...pricingInputs, gst: sanitizeNumericInput(e.target.value) })}
+                      className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs font-bold text-right"
+                    />
+                  </div>
+
+                  {/* Discount (₹) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Discount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="Enter Discount"
+                      value={pricingInputs.discount}
+                      onChange={(e) => setPricingInputs({ ...pricingInputs, discount: sanitizeNumericInput(e.target.value) })}
+                      className="w-full bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none text-xs font-bold text-right"
+                    />
+                  </div>
+                </div>
+
+                {/* Back to Step 2 Navigation */}
+                <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-start">
+                  <button
+                    onClick={() => setCurrentStep(2)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all shadow-sm cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Material Specification
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Pricing Summary */}
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 lg:p-8 sticky top-8 shadow-sm">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-5 border-b border-slate-100 pb-3">
+                Pricing Summary
+              </h3>
+
+              <div className="space-y-4">
+                {/* Material Cost */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-semibold">Material Cost</span>
+                  <span className="text-sm font-bold text-slate-900">
+                    {formatCurrency(calculation.materialCost)}
+                  </span>
+                </div>
+
+                {/* Grand Total Estimate */}
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                        Grand Total Estimate
+                      </span>
+                      <span className="text-xl font-black text-emerald-700 block mt-1">
+                        {formatCurrency(calculation.grandTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5 pt-5 border-t border-slate-100 mt-5">
                 <button
-                  type="button"
-                  onClick={() => setIsCustModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white text-xs font-semibold"
+                  onClick={handleGeneratePDF}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition-all shadow-sm"
                 >
-                  Cancel
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  Generate Estimate
                 </button>
+
                 <button
-                  type="submit"
+                  onClick={handleSaveProject}
                   disabled={loading}
-                  className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs transition-all shadow-sm"
                 >
-                  Create Client
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {projectToEdit ? 'Update Project' : 'Save Project'}
+                </button>
+
+                <button
+                  onClick={handlePrintQuotation}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  Print
                 </button>
               </div>
-            </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Custom Material Row Modal */}
+      {isAddMaterialModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-sm shadow-xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Select Material Category</h3>
+              <button
+                onClick={() => setIsAddMaterialModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                onClick={() => handleAddNewMaterial('SHEET')}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 text-left transition-all group"
+              >
+                <div className="w-3 h-3 rounded-full bg-emerald-600 shrink-0"></div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 block">Sheet Material</span>
+                  <span className="text-[10px] text-slate-500">Length & Width in inches, Gauge in mm</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleAddNewMaterial('PIPE')}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-cyan-500 hover:bg-cyan-50/40 text-left transition-all group"
+              >
+                <div className="w-3 h-3 rounded-full bg-cyan-600 shrink-0"></div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 group-hover:text-cyan-700 block">Pipe Material</span>
+                  <span className="text-[10px] text-slate-500">Pipe Size & Length in ft</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleAddNewMaterial('PURCHASED')}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-amber-500 hover:bg-amber-50/40 text-left transition-all group"
+              >
+                <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0"></div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 group-hover:text-amber-700 block">Purchased Item</span>
+                  <span className="text-[10px] text-slate-500">Quantity & Unit Weight in kg</span>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
