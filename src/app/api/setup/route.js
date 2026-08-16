@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import {
   getCategories,
   createCategory,
+  getCounterTypes,
+  createCounterType,
   getMaterials,
   createMaterial,
   getCustomers,
@@ -9,18 +11,24 @@ import {
   getProjects,
   createProject,
 } from '@/lib/db';
-import { COUNTER_TYPE_TEMPLATES } from '@/lib/constants';
-import { calculateEstimate, calculateTotalMaterialWeight } from '@/lib/calculations';
+import { COUNTER_TYPES, COUNTER_TYPES_CONFIG, DEFAULT_MASTER_PRODUCTS, COUNTER_TYPE_TEMPLATES } from '@/lib/constants';
+import { calculateEstimate } from '@/lib/calculations';
+import fs from 'fs';
+import path from 'path';
 
 export async function GET() {
   try {
-    // 1. Seed Categories (Stainless Steel Only)
+    const JSON_DB_PATH = path.join(process.cwd(), 'data', 'db.json');
+
+    // 1. Seed Categories
     let categories = await getCategories();
     if (!categories || categories.length === 0) {
       const defaultCategories = [
         'Sheet Materials',
         'Pipe Materials',
+        'Angle Materials',
         'Purchased Items',
+        'Compressor / Special Components'
       ];
       for (const name of defaultCategories) {
         await createCategory({ categoryName: name });
@@ -28,40 +36,72 @@ export async function GET() {
       categories = await getCategories();
     }
 
-    const catMap = {};
-    categories.forEach((c) => {
-      catMap[c.categoryName] = c._id;
-    });
+    // 2. Seed Counter Types Master Table
+    let counterTypes = await getCounterTypes();
+    const counterTypeDescriptions = {
+      'SS Dish Rack': 'Commercial Clean Dish & Plate Tier Storage Rack',
+      'Dish Rack': 'Slotted SS Clean Dish Storage Rack',
+      'Pot Rack': 'Commercial Heavy Vessel, Pot & Pan Storage Framework',
+      'Dining Table': 'Heavy Duty Canteen & Restaurant Dining Table with Stool Arms',
+      'Bench': 'SS Commercial Dining & Waiting Bench with Ergonomic Back Support',
+      'Storage Bin': 'Multi-compartment Onion, Potato & Grain Ventilated Storage Bins',
+      'Counter': 'Multi-tier Food Service, Bain Marie, Display & Work Counter',
+      'Counters': 'Multi-tier Display, Bain Marie & Storage Showcase',
+      'Trolley': 'Heavy Commercial Material Handling & Kitchen Service Trolley',
+      'Fridge': 'Commercial Vertical & Horizontal Refrigeration Cabinets',
+      'Table': 'Commercial Heavy Duty Work & Prep Table',
+      'Sink Unit': 'Single / Double Sink Washing Station',
+      'Sink Unit with Table': 'Integrated Sink & Preparation Worktable',
+      'Soiled Dish Table': 'Scraping, Pre-wash & Dish Receiving Station',
+      'Gas Range': 'Commercial Burner Gas Cooking Range',
+      'Dosa Bhatti': 'Heavy Duty Commercial Griddle & Bhatti',
+      'SS Tandoor': 'Insulated Stainless Steel Charcoal / Gas Tandoor',
+      'Shawarma Cabin': 'Commercial Shawarma Rotisserie & Cabin Unit',
+      'Chapati Puffer Plate': 'Puffer Hotplate Roti / Chapati Station'
+    };
 
-    // 2. Seed Materials (Stainless Steel Only - SS304 & SS316)
+    if (!counterTypes || counterTypes.length < COUNTER_TYPES.length) {
+      const existingNames = new Set((counterTypes || []).map(ct => ct.name));
+      for (let i = 0; i < COUNTER_TYPES.length; i++) {
+        const ctName = COUNTER_TYPES[i];
+        if (!existingNames.has(ctName)) {
+          await createCounterType({
+            name: ctName,
+            description: counterTypeDescriptions[ctName] || 'Commercial Stainless Steel Equipment',
+            category: 'Kitchen Equipment',
+            order: i + 1,
+            status: 'Active'
+          });
+        }
+      }
+      counterTypes = await getCounterTypes();
+    }
+
+    // 3. Clean & Seed Material Master
     let materials = await getMaterials();
-    // If materials contain legacy MS or are empty, reset with Stainless Steel
-    const hasLegacyMs = (materials || []).some(m => (m.materialName || '').toLowerCase().includes('ms '));
-    if (!materials || materials.length === 0 || hasLegacyMs) {
-      const ssMaterials = [
-        { materialName: 'SS304 Sheet 1.0mm', category: 'Sheet', grade: 'SS304', unit: 'kg', price: 250, description: 'Stainless Steel 304 Grade 1.0 mm Sheet', status: 'Active' },
-        { materialName: 'SS304 Sheet 1.2mm', category: 'Sheet', grade: 'SS304', unit: 'kg', price: 255, description: 'Stainless Steel 304 Grade 1.2 mm Sheet', status: 'Active' },
-        { materialName: 'SS304 Sheet 1.5mm', category: 'Sheet', grade: 'SS304', unit: 'kg', price: 260, description: 'Stainless Steel 304 Grade 1.5 mm Sheet', status: 'Active' },
-        { materialName: 'SS304 Sheet 0.8mm', category: 'Sheet', grade: 'SS304', unit: 'kg', price: 250, description: 'Stainless Steel 304 Grade 0.8 mm Sheet', status: 'Active' },
-        { materialName: 'SS316 Sheet 1.2mm', category: 'Sheet', grade: 'SS316', unit: 'kg', price: 340, description: 'Stainless Steel 316 Acid Resistant Sheet', status: 'Active' },
-        { materialName: 'SS304 Square Pipe 25×25 mm', category: 'Pipe', grade: 'SS304', unit: 'kg', price: 270, description: 'SS 304 25x25mm Square Box Section', status: 'Active' },
-        { materialName: 'SS304 Square Pipe 38×38 mm', category: 'Pipe', grade: 'SS304', unit: 'kg', price: 270, description: 'SS 304 38x38mm Leg Pipe Section', status: 'Active' },
-        { materialName: 'SS304 Square Pipe 40×40 mm', category: 'Pipe', grade: 'SS304', unit: 'kg', price: 275, description: 'SS 304 40x40mm Heavy Leg Pipe', status: 'Active' },
-        { materialName: 'SS304 Rectangular Pipe 50×25 mm', category: 'Pipe', grade: 'SS304', unit: 'kg', price: 275, description: 'SS 304 50x25mm Rectangular Framework Section', status: 'Active' },
-        { materialName: 'SS304 Round Pipe Ø 38 mm', category: 'Pipe', grade: 'SS304', unit: 'kg', price: 270, description: 'SS 304 38mm Circular Pipe', status: 'Active' },
-        { materialName: 'Nylon Bush (Heavy Duty)', category: 'Purchased', grade: 'SS304', unit: 'Piece', price: 25, description: 'Impact resistant leg insert bush (0.25 kg)', status: 'Active' },
-        { materialName: 'SS Bullet Feet (Adjustable)', category: 'Purchased', grade: 'SS304', unit: 'Piece', price: 120, description: 'SS height adjustable bullet feet (0.40 kg)', status: 'Active' },
-        { materialName: 'SS Door Handle', category: 'Purchased', grade: 'SS304', unit: 'Piece', price: 95, description: 'Sleek SS pull handle (0.30 kg)', status: 'Active' },
-        { materialName: 'SS Waste Coupling', category: 'Purchased', grade: 'SS304', unit: 'Piece', price: 180, description: 'Commercial sink drain coupling (0.35 kg)', status: 'Active' }
-      ];
+    const needsRefresh = !materials || materials.length < DEFAULT_MASTER_PRODUCTS.length ||
+      materials.some(m => !m.counterTypes || m.counterTypes.length === 0 || (m.counterTypes.includes('Fridge') && !m.gaugeOptions && m.category === 'Sheet'));
 
-      for (const mat of ssMaterials) {
-        await createMaterial(mat);
+    if (needsRefresh) {
+      if (fs.existsSync(JSON_DB_PATH)) {
+        const raw = fs.readFileSync(JSON_DB_PATH, 'utf8');
+        const db = JSON.parse(raw);
+        db.materials = DEFAULT_MASTER_PRODUCTS.map((prod, idx) => ({
+          _id: `mat_${Date.now().toString(36)}_${idx}`,
+          ...prod,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }));
+        fs.writeFileSync(JSON_DB_PATH, JSON.stringify(db, null, 2));
+      } else {
+        for (const prod of DEFAULT_MASTER_PRODUCTS) {
+          await createMaterial(prod);
+        }
       }
       materials = await getMaterials();
     }
 
-    // 3. Seed Customers
+    // 4. Seed Customers
     let customers = await getCustomers();
     if (!customers || customers.length === 0) {
       const mockCustomers = [
@@ -75,14 +115,11 @@ export async function GET() {
       customers = await getCustomers();
     }
 
-    // 4. Seed Standard Estimations
+    // 5. Seed Standard Estimations if empty
     let projects = await getProjects();
-    if (!projects || projects.length === 0 || hasLegacyMs) {
+    if (!projects || projects.length === 0) {
       const c1 = customers[0] || {};
-      const c2 = customers[1] || {};
-
-      // Estimate 1: Commercial Stainless Steel Kitchen
-      const template1 = COUNTER_TYPE_TEMPLATES['Stainless Steel Kitchen'];
+      const template1 = getFallbackCounterTemplate('Table');
       const est1 = calculateEstimate({
         materials: template1,
         materialRate: 250,
@@ -93,16 +130,16 @@ export async function GET() {
 
       await createProject({
         estimateNumber: 'EST-100201',
-        projectName: 'Commercial Kitchen Station',
+        projectName: 'Commercial Kitchen Work Table',
         customerId: c1._id || '',
         customerName: c1.customerName || 'Rajesh Sharma',
         companyName: c1.companyName || 'Royal Hospitality Group',
         phone: c1.phone || '+91 98765 43210',
         email: c1.email || 'procurement@royalhospitality.in',
         address: c1.address || 'Plot 45, Phase II, Industrial Area, Mumbai',
-        counterType: 'Stainless Steel Kitchen',
+        counterType: 'Table',
         date: new Date().toISOString(),
-        remarks: 'Heavy duty SS304 kitchen counter with splash back and leg bracings.',
+        remarks: 'Heavy duty SS304 kitchen work table with under shelf and leg bracings.',
         sheets: template1.sheets,
         pipes: template1.pipes,
         purchased: template1.purchased,
@@ -112,56 +149,20 @@ export async function GET() {
         gst: 18,
         totalMaterialWeight: est1.totalWeight,
         materialCost: est1.materialCost,
-        subtotal: est1.subtotal,
+        purchasedItemCost: est1.purchasedItemCost,
+        discountedMaterialCost: est1.discountedMaterialCost,
         taxableAmount: est1.taxableAmount,
         gstAmount: est1.gstAmount,
         totalAmount: est1.grandTotal,
-      });
-
-      // Estimate 2: Commercial Sink Unit
-      const template2 = COUNTER_TYPE_TEMPLATES['Sink Unit'];
-      const est2 = calculateEstimate({
-        materials: template2,
-        materialRate: 260,
-        labourCost: 1800,
-        discount: 0,
-        gst: 18
-      });
-
-      const date2 = new Date();
-      date2.setDate(date2.getDate() - 5);
-
-      await createProject({
-        estimateNumber: 'EST-100202',
-        projectName: 'Commercial Double Sink Unit',
-        customerId: c2._id || '',
-        customerName: c2.customerName || 'Anil Kumar',
-        companyName: c2.companyName || 'Spice Route Cloud Kitchens',
-        phone: c2.phone || '+91 91234 56789',
-        email: c2.email || 'operations@spiceroute.com',
-        address: c2.address || '12 Electronic City, Bangalore, Karnataka',
-        counterType: 'Sink Unit',
-        date: date2.toISOString(),
-        remarks: 'SS304 heavy sink unit with bottom shelf and waste coupling.',
-        sheets: template2.sheets,
-        pipes: template2.pipes,
-        purchased: template2.purchased,
-        materialRate: 260,
-        labourCost: 1800,
-        discount: 0,
-        gst: 18,
-        totalMaterialWeight: est2.totalWeight,
-        materialCost: est2.materialCost,
-        subtotal: est2.subtotal,
-        taxableAmount: est2.taxableAmount,
-        gstAmount: est2.gstAmount,
-        totalAmount: est2.grandTotal,
+        grandTotal: est1.grandTotal
       });
     }
 
     return NextResponse.json({
       success: true,
       message: 'Shree Balaji Enterprises database seeded successfully.',
+      materialsCount: (materials || []).length,
+      counterTypesCount: (counterTypes || []).length
     });
   } catch (error) {
     console.error('Setup seeding error:', error);

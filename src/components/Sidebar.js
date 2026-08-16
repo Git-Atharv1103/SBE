@@ -15,6 +15,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { COMPANY_DETAILS, DEFAULT_GST_PERCENT } from '@/lib/constants';
+import { useAlert } from '@/context/AlertContext';
 
 export default function Sidebar({ 
   isOpen, 
@@ -22,6 +23,7 @@ export default function Sidebar({
   activeTab, 
   setActiveTab 
 }) {
+  const { showAlert } = useAlert();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -29,10 +31,9 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
-    { id: 'builder', name: 'Estimate Builder', icon: FileSpreadsheet },
+    { id: 'builder', name: 'Project Estimate', icon: FileSpreadsheet },
     { id: 'projects', name: 'Projects', icon: ClipboardList },
     { id: 'materials', name: 'Material Master', icon: Wrench },
-    { id: 'customers', name: 'Customer Master', icon: Users },
   ];
 
   // Close profile dropdown on outside click or escape
@@ -203,7 +204,11 @@ export default function Sidebar({
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
-                    alert('Shree Balaji Enterprises — System is active and synchronized.');
+                    showAlert({
+                      title: 'System Status',
+                      message: 'Shree Balaji Enterprises — System is active and synchronized.',
+                      type: 'info'
+                    });
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 >

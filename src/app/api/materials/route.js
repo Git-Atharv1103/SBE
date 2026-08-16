@@ -3,7 +3,15 @@ import { getMaterials, createMaterial, updateMaterial, deleteMaterial } from '@/
 
 export async function GET(request) {
   try {
-    const materials = await getMaterials();
+    const { searchParams } = new URL(request.url);
+    const counterType = searchParams.get('counterType');
+    const category = searchParams.get('category');
+
+    const filter = {};
+    if (counterType) filter.counterType = counterType;
+    if (category) filter.category = category;
+
+    const materials = await getMaterials(filter);
     return NextResponse.json(materials);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -13,8 +21,8 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
-    if (!data.materialName || !data.categoryId || !data.unit || data.price === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!data.materialName || !data.category) {
+      return NextResponse.json({ error: 'Material Name and Category are required' }, { status: 400 });
     }
     const newMaterial = await createMaterial(data);
     return NextResponse.json(newMaterial, { status: 201 });
@@ -26,14 +34,15 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
-    const id = data._id;
+    const id = data.id || data._id;
     if (!id) {
-      return NextResponse.json({ error: 'Material ID (_id) is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Material ID is required' }, { status: 400 });
     }
     
-    // Create copy without _id for Mongoose update
+    // Create copy without _id / id for update
     const updateData = { ...data };
     delete updateData._id;
+    delete updateData.id;
     
     const updated = await updateMaterial(id, updateData);
     if (!updated) {

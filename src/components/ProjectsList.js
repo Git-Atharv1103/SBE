@@ -13,8 +13,10 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { generateQuotationPDF } from '@/lib/pdfGenerator';
+import { useAlert } from '@/context/AlertContext';
 
 export default function ProjectsList({ onEditProject, setActiveTab }) {
+  const { showConfirm, showAlert } = useAlert();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +45,15 @@ export default function ProjectsList({ onEditProject, setActiveTab }) {
   };
 
   const handleDeleteProject = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this cost estimation?')) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Cost Estimation',
+      message: 'Are you sure you want to delete this cost estimation? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Yes, Delete',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -51,11 +61,20 @@ export default function ProjectsList({ onEditProject, setActiveTab }) {
       if (res.ok) {
         fetchProjects();
       } else {
-        alert('Failed to delete estimation');
+        await showAlert({
+          title: 'Error',
+          message: 'Failed to delete estimation.',
+          type: 'error'
+        });
         setLoading(false);
       }
     } catch (error) {
       console.error(error);
+      await showAlert({
+        title: 'Network Error',
+        message: 'Could not connect to server.',
+        type: 'error'
+      });
       setLoading(false);
     }
   };
@@ -118,7 +137,7 @@ export default function ProjectsList({ onEditProject, setActiveTab }) {
         <div className="bg-white border border-slate-200 rounded-xl py-16 text-center shadow-sm">
           <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <h3 className="text-slate-800 font-bold text-sm mb-1">No Estimations Found</h3>
-          <p className="text-slate-500 text-xs max-w-sm mx-auto">Create a new estimate in the Estimate Builder to populate your projects list.</p>
+          <p className="text-slate-500 text-xs max-w-sm mx-auto">Create a new estimate in Project Estimate to populate your projects list.</p>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
