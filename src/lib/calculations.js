@@ -353,6 +353,11 @@ export const calculateGrandTotal = calculateGrandTotalEstimate;
  */
 export function calculateEstimate({
   materials,
+  sheets,
+  pipes,
+  angles,
+  purchased,
+  compressor,
   totalMaterialWeight,
   materialRate = 0,
   labourCost = 0,
@@ -360,22 +365,43 @@ export function calculateEstimate({
   gst = DEFAULT_GST_PERCENT
 }) {
   let purchasedRows = [];
+  
+  if (Array.isArray(purchased)) {
+    purchasedRows.push(...purchased);
+  }
+  if (Array.isArray(compressor)) {
+    purchasedRows.push(...compressor);
+  }
   if (materials) {
     if (Array.isArray(materials)) {
-      purchasedRows = materials.filter(m => {
+      purchasedRows.push(...materials.filter(m => {
         const cat = (m.calculationType || m.category || '').toLowerCase();
         return cat === 'purchased' || cat === 'compressor' || cat === 'special';
-      });
+      }));
     } else if (typeof materials === 'object') {
       const pur = Array.isArray(materials.purchased) ? materials.purchased : [];
       const comp = Array.isArray(materials.compressor) ? materials.compressor : [];
-      purchasedRows = [...pur, ...comp];
+      purchasedRows.push(...pur, ...comp);
+    }
+  }
+
+  // Deduplicate purchasedRows by id if both top-level and materials were passed
+  const seenIds = new Set();
+  const uniquePurchasedRows = [];
+  for (const item of purchasedRows) {
+    if (item && item.id) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        uniquePurchasedRows.push(item);
+      }
+    } else if (item) {
+      uniquePurchasedRows.push(item);
     }
   }
 
   const totalWeight = totalMaterialWeight !== undefined && !isNaN(parseFloat(totalMaterialWeight))
     ? parseFloat(totalMaterialWeight)
-    : calculateGrandTotalWeight(materials);
+    : calculateGrandTotalWeight(materials || { sheets, pipes, angles });
 
   const rate = parseFloat(materialRate) || 0;
   const labour = parseFloat(labourCost) || 0;
@@ -386,7 +412,7 @@ export function calculateEstimate({
   const materialCost = calculateMaterialCost(totalWeight, rate);
 
   // 2. Purchased Item Cost calculated separately
-  const purchasedItemCost = calculatePurchasedTotal(purchasedRows);
+  const purchasedItemCost = calculatePurchasedTotal(uniquePurchasedRows);
 
   // 3. Discount applied ONLY to Material Cost
   const discountedMaterialCost = calculateDiscountedMaterialCost(materialCost, disc);

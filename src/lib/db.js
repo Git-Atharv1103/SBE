@@ -131,7 +131,9 @@ const ProjectSchema = new mongoose.Schema({
   // Material breakdown
   sheets: [{ type: mongoose.Schema.Types.Mixed }],
   pipes: [{ type: mongoose.Schema.Types.Mixed }],
+  angles: [{ type: mongoose.Schema.Types.Mixed }],
   purchased: [{ type: mongoose.Schema.Types.Mixed }],
+  compressor: [{ type: mongoose.Schema.Types.Mixed }],
   
   // Pricing inputs
   materialRate: { type: Number, default: 0 },
@@ -599,6 +601,33 @@ export async function deleteCustomer(id) {
 }
 
 // PROJECTS / ESTIMATIONS REPOSITORY
+export async function getNextEstimateNumber() {
+  await connectDB();
+  let projects = [];
+  if (useMongo) {
+    projects = await Project.find({}, { estimateNumber: 1 }).lean();
+  } else {
+    const db = readJsonDb();
+    projects = db.projects || [];
+  }
+
+  let maxSeq = 0;
+  for (const p of projects) {
+    const numStr = String(p.estimateNumber || '');
+    // Match EST 01, EST 1, EST-01, EST01, etc.
+    const match = numStr.match(/EST[-\s]?(\d+)/i);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (!isNaN(val) && val > maxSeq) {
+        maxSeq = val;
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  return `EST ${String(nextSeq).padStart(2, '0')}`;
+}
+
 export async function getProjects() {
   await connectDB();
   if (useMongo) {
@@ -623,13 +652,18 @@ export async function getProjectById(id) {
 export async function createProject(projectData, materialsList = []) {
   await connectDB();
   
-  // Format estimate number if not provided
-  const estimateNumber = projectData.estimateNumber || `EST-${Date.now().toString().slice(-6)}`;
+  // Format estimate number if not provided or if using legacy format
+  let estimateNumber = projectData.estimateNumber ? String(projectData.estimateNumber).trim() : '';
+  if (!estimateNumber || estimateNumber.startsWith('EST-')) {
+    estimateNumber = await getNextEstimateNumber();
+  }
   
   // Ensure structured materials are stored
   const sheets = projectData.sheets || [];
   const pipes = projectData.pipes || [];
+  const angles = projectData.angles || [];
   const purchased = projectData.purchased || [];
+  const compressor = projectData.compressor || [];
 
   const record = {
     estimateNumber,
@@ -641,11 +675,14 @@ export async function createProject(projectData, materialsList = []) {
     email: projectData.email || '',
     address: projectData.address || '',
     counterType: projectData.counterType,
+    counterSubtype: projectData.counterSubtype || '',
     date: projectData.date || new Date().toISOString(),
     remarks: projectData.remarks || '',
     sheets,
     pipes,
+    angles,
     purchased,
+    compressor,
     materialRate: Number(projectData.materialRate || 0),
     labourCost: Number(projectData.labourCost || 0),
     discount: Number(projectData.discount || 0),
@@ -656,7 +693,9 @@ export async function createProject(projectData, materialsList = []) {
     taxableAmount: Number(projectData.taxableAmount || 0),
     gstAmount: Number(projectData.gstAmount || 0),
     totalAmount: Number(projectData.totalAmount || projectData.grandTotal || 0),
-    status: projectData.status || 'Active'
+    status: projectData.status || 'Active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   if (useMongo) {
@@ -681,7 +720,9 @@ export async function updateProject(id, projectData, materialsList = []) {
   
   const sheets = projectData.sheets || [];
   const pipes = projectData.pipes || [];
+  const angles = projectData.angles || [];
   const purchased = projectData.purchased || [];
+  const compressor = projectData.compressor || [];
 
   const updateFields = {
     estimateNumber: projectData.estimateNumber,
@@ -693,11 +734,14 @@ export async function updateProject(id, projectData, materialsList = []) {
     email: projectData.email,
     address: projectData.address,
     counterType: projectData.counterType,
+    counterSubtype: projectData.counterSubtype || '',
     date: projectData.date,
     remarks: projectData.remarks || '',
     sheets,
     pipes,
+    angles,
     purchased,
+    compressor,
     materialRate: Number(projectData.materialRate || 0),
     labourCost: Number(projectData.labourCost || 0),
     discount: Number(projectData.discount || 0),
@@ -708,7 +752,8 @@ export async function updateProject(id, projectData, materialsList = []) {
     taxableAmount: Number(projectData.taxableAmount || 0),
     gstAmount: Number(projectData.gstAmount || 0),
     totalAmount: Number(projectData.totalAmount || projectData.grandTotal || 0),
-    status: projectData.status || 'Active'
+    status: projectData.status || 'Active',
+    updatedAt: new Date().toISOString()
   };
 
   if (useMongo) {

@@ -6,13 +6,8 @@ import {
   createCounterType,
   getMaterials,
   createMaterial,
-  getCustomers,
-  createCustomer,
-  getProjects,
-  createProject,
 } from '@/lib/db';
-import { COUNTER_TYPES, COUNTER_TYPES_CONFIG, DEFAULT_MASTER_PRODUCTS, COUNTER_TYPE_TEMPLATES } from '@/lib/constants';
-import { calculateEstimate } from '@/lib/calculations';
+import { COUNTER_TYPES, DEFAULT_MASTER_PRODUCTS } from '@/lib/constants';
 import fs from 'fs';
 import path from 'path';
 
@@ -101,71 +96,39 @@ export async function GET() {
       materials = await getMaterials();
     }
 
-    // 4. Seed Customers
-    let customers = await getCustomers();
-    if (!customers || customers.length === 0) {
-      const mockCustomers = [
-        { customerName: 'Rajesh Sharma', companyName: 'Royal Hospitality Group', counterType: 'Stainless Steel Kitchen', phone: '+91 98765 43210', address: 'Plot 45, Phase II, Industrial Area, Mumbai', email: 'procurement@royalhospitality.in' },
-        { customerName: 'Anil Kumar', companyName: 'Spice Route Cloud Kitchens', counterType: 'Sink Unit', phone: '+91 91234 56789', address: '12 Electronic City, Bangalore, Karnataka', email: 'operations@spiceroute.com' },
-        { customerName: 'Vikram Singh', companyName: 'Urban Diner Eateries', counterType: 'Gas Range', phone: '+91 99887 76655', address: 'SCO 23, Sector 18, Gurgaon, Haryana', email: 'vikram@urbandiner.co' },
-      ];
-      for (const cust of mockCustomers) {
-        await createCustomer(cust);
-      }
-      customers = await getCustomers();
-    }
-
-    // 5. Seed Standard Estimations if empty
-    let projects = await getProjects();
-    if (!projects || projects.length === 0) {
-      const c1 = customers[0] || {};
-      const template1 = getFallbackCounterTemplate('Table');
-      const est1 = calculateEstimate({
-        materials: template1,
-        materialRate: 250,
-        labourCost: 2500,
-        discount: 500,
-        gst: 18
-      });
-
-      await createProject({
-        estimateNumber: 'EST-100201',
-        projectName: 'Commercial Kitchen Work Table',
-        customerId: c1._id || '',
-        customerName: c1.customerName || 'Rajesh Sharma',
-        companyName: c1.companyName || 'Royal Hospitality Group',
-        phone: c1.phone || '+91 98765 43210',
-        email: c1.email || 'procurement@royalhospitality.in',
-        address: c1.address || 'Plot 45, Phase II, Industrial Area, Mumbai',
-        counterType: 'Table',
-        date: new Date().toISOString(),
-        remarks: 'Heavy duty SS304 kitchen work table with under shelf and leg bracings.',
-        sheets: template1.sheets,
-        pipes: template1.pipes,
-        purchased: template1.purchased,
-        materialRate: 250,
-        labourCost: 2500,
-        discount: 500,
-        gst: 18,
-        totalMaterialWeight: est1.totalWeight,
-        materialCost: est1.materialCost,
-        purchasedItemCost: est1.purchasedItemCost,
-        discountedMaterialCost: est1.discountedMaterialCost,
-        taxableAmount: est1.taxableAmount,
-        gstAmount: est1.gstAmount,
-        totalAmount: est1.grandTotal,
-        grandTotal: est1.grandTotal
-      });
-    }
-
+    // Database master categories, counter types, and materials are prepared.
+    // No mock projects or mock customers are seeded. Fresh starts with 0 projects.
     return NextResponse.json({
       success: true,
-      message: 'Shree Balaji Enterprises database seeded successfully.',
+      message: 'Shree Balaji Enterprises master catalog initialized successfully.',
       materialsCount: (materials || []).length,
       counterTypesCount: (counterTypes || []).length
     });
   } catch (error) {
     console.error('Setup seeding error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const action = body.action;
+    const JSON_DB_PATH = path.join(process.cwd(), 'data', 'db.json');
+
+    if (action === 'clean_projects_and_reset') {
+      if (fs.existsSync(JSON_DB_PATH)) {
+        const raw = fs.readFileSync(JSON_DB_PATH, 'utf8');
+        const db = JSON.parse(raw);
+        db.projects = [];
+        db.customers = [];
+        fs.writeFileSync(JSON_DB_PATH, JSON.stringify(db, null, 2));
+      }
+      return NextResponse.json({ success: true, message: 'All projects and customers cleared. Ready for EST 01.' });
+    }
+
+    return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
+  } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

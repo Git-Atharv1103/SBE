@@ -30,10 +30,38 @@ export default function Sidebar({
   const menuRef = useRef(null);
 
   const menuItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
-    { id: 'builder', name: 'Project Estimate', icon: FileSpreadsheet },
-    { id: 'projects', name: 'Projects', icon: ClipboardList },
-    { id: 'materials', name: 'Material Master', icon: Wrench },
+    { 
+      id: 'dashboard', 
+      name: 'Dashboard', 
+      icon: LayoutDashboard,
+      activeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-xs',
+      iconColor: 'text-emerald-600',
+      tag: 'Overview'
+    },
+    { 
+      id: 'builder', 
+      name: 'Project Estimate', 
+      icon: FileSpreadsheet,
+      activeColor: 'bg-blue-50 text-blue-800 border-blue-200 shadow-xs',
+      iconColor: 'text-blue-600',
+      tag: 'Calculator'
+    },
+    { 
+      id: 'projects', 
+      name: 'Projects', 
+      icon: ClipboardList,
+      activeColor: 'bg-indigo-50 text-indigo-800 border-indigo-200 shadow-xs',
+      iconColor: 'text-indigo-600',
+      tag: 'Quotations'
+    },
+    { 
+      id: 'materials', 
+      name: 'Material Master', 
+      icon: Wrench,
+      activeColor: 'bg-sky-50 text-sky-800 border-sky-200 shadow-xs',
+      iconColor: 'text-sky-600',
+      tag: 'Catalog'
+    },
   ];
 
   // Close profile dropdown on outside click or escape
@@ -122,7 +150,7 @@ export default function Sidebar({
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -130,18 +158,25 @@ export default function Sidebar({
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer active:translate-y-0.5 ${
                   isActive
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? `${item.activeColor} shadow-xs font-black`
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                 }`}
               >
-                <Icon 
-                  className={`w-4 h-4 transition-transform duration-200 ${
-                    isActive ? 'text-emerald-600' : 'text-slate-400'
-                  }`} 
-                />
-                {item.name}
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                    isActive ? 'bg-white shadow-2xs' : 'bg-slate-100/70 text-slate-500'
+                  }`}>
+                    <Icon className={`w-4 h-4 ${isActive ? item.iconColor : 'text-slate-500'}`} />
+                  </div>
+                  <span>{item.name}</span>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                  isActive ? 'bg-white/80 text-slate-700 shadow-2xs' : 'text-slate-400'
+                }`}>
+                  {item.tag}
+                </span>
               </button>
             );
           })}
@@ -260,21 +295,25 @@ export default function Sidebar({
                 </div>
               </div>
 
-              {/* Website */}
-              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 flex items-center justify-between gap-3">
+              {/* Contact Info */}
+              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                    Official Website
+                    Official Email
                   </span>
-                  <a
-                    href={COMPANY_DETAILS.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5"
-                  >
-                    <Globe className="w-3.5 h-3.5 text-emerald-600" />
-                    {COMPANY_DETAILS.website}
-                  </a>
+                  <span className="text-xs font-bold text-emerald-700">{COMPANY_DETAILS.email}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Phone Numbers
+                  </span>
+                  <span className="text-xs font-semibold text-slate-800">{COMPANY_DETAILS.phone}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Office / Works Address
+                  </span>
+                  <span className="text-xs text-slate-600">{COMPANY_DETAILS.address}</span>
                 </div>
               </div>
             </div>

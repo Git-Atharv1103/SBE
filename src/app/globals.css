@@ -19,6 +19,126 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================================================================= */
+/* MODERN 3D BUSINESS UI TOKENS & UTILITY CLASSES */
+/* ========================================================================= */
+
+/* 3D Elevated Card */
+.card-3d {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 4px 14px -2px rgba(15, 23, 42, 0.05);
+  border-radius: 1rem;
+  position: relative;
+}
+
+/* 3D Interactive Hover Card */
+.card-3d-interactive {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 4px 14px -2px rgba(15, 23, 42, 0.05);
+  border-radius: 1rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-3d-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(203, 213, 225, 1);
+  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+}
+
+/* 3D Glass / Floating Header */
+.card-3d-glass {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
+}
+
+/* 3D Input Style */
+.input-3d {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: all 0.15s ease;
+}
+
+.input-3d:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), inset 0 1px 2px rgba(15, 23, 42, 0.02);
+  outline: none;
+}
+
+/* 3D Tactile Buttons */
+.btn-3d {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 0.625rem;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn-3d:active {
+  transform: translateY(1px);
+}
+
+.btn-3d-emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: 1px solid #047857;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-3d-emerald:hover {
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-3d-blue {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-3d-blue:hover {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-3d-indigo {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  border: 1px solid #4338ca;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-3d-indigo:hover {
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-3d-slate {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), inset 0 1px 0 #ffffff;
+}
+
+.btn-3d-slate:hover {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #0f172a;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 /* Hide HTML5 number input increase/decrease arrows */
@@ -40,12 +160,12 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

@@ -633,41 +633,43 @@ export default function MaterialMaster() {
       {/* Header & Sub-tab Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
-            <Boxes className="w-7 h-7 text-emerald-600" />
-            Material Master
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            Single source of truth for Counter Types, Material Components, Gauges and Formulas.
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-600 shadow-xs animate-pulse" />
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
+              Material Master Catalog
+            </h1>
+          </div>
+          <p className="text-xs text-slate-500 font-medium">
+            Single source of truth for Counter Types, Material Components, Gauges and Formulas
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
           <button
             onClick={handleOpenAddProductModal}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-xs cursor-pointer transition-all"
+            className="btn-3d btn-3d-emerald px-4 py-2 text-xs shadow-md shadow-emerald-600/20"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
             Add Master Material
           </button>
           <button
             onClick={handleOpenAddCounterTypeModal}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-xs cursor-pointer transition-all"
+            className="btn-3d btn-3d-slate px-4 py-2 text-xs"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
             Add Counter Type
           </button>
         </div>
       </div>
 
-      {/* Sub-Tabs Nav */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto">
+      {/* Modern 3D Sub-Tabs Nav */}
+      <div className="flex items-center gap-3 border-b border-slate-200 pb-3 mb-6 overflow-x-auto">
         <button
           onClick={() => setActiveSubTab('catalog')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+          className={`card-3d-interactive flex items-center gap-2 px-4.5 py-2.5 font-black text-xs transition-all cursor-pointer ${
             activeSubTab === 'catalog'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ? 'bg-linear-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/25 border-teal-600'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -675,10 +677,10 @@ export default function MaterialMaster() {
         </button>
         <button
           onClick={() => setActiveSubTab('counterTypes')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+          className={`card-3d-interactive flex items-center gap-2 px-4.5 py-2.5 font-black text-xs transition-all cursor-pointer ${
             activeSubTab === 'counterTypes'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ? 'bg-linear-to-r from-slate-900 to-slate-800 text-white shadow-md shadow-slate-900/25 border-slate-800'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
         >
           <LayoutGrid className="w-4 h-4 text-teal-400" />
@@ -691,36 +693,36 @@ export default function MaterialMaster() {
       {/* ========================================================================= */}
       {activeSubTab === 'catalog' && (
         <div className="space-y-6">
-          {/* Quick Stats Row */}
+          {/* Quick Stats 3D Row */}
           <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Items</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-slate-50/50 border-slate-200">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Total Items</span>
               <span className="text-xl font-black text-slate-900 block mt-1">{stats.total}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Sheets</span>
-              <span className="text-xl font-black text-emerald-700 block mt-1">{stats.sheetCount}</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-teal-50/30 border-teal-200">
+              <span className="text-[10px] font-black text-teal-700 uppercase tracking-wider block">Sheets</span>
+              <span className="text-xl font-black text-teal-700 block mt-1">{stats.sheetCount}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-cyan-600 uppercase tracking-wider block">Pipes</span>
-              <span className="text-xl font-black text-cyan-700 block mt-1">{stats.pipeCount}</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-sky-50/30 border-sky-200">
+              <span className="text-[10px] font-black text-sky-700 uppercase tracking-wider block">Pipes</span>
+              <span className="text-xl font-black text-sky-700 block mt-1">{stats.pipeCount}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Angles</span>
-              <span className="text-xl font-black text-indigo-700 block mt-1">{stats.angleCount}</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-amber-50/30 border-amber-200">
+              <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block">Angles</span>
+              <span className="text-xl font-black text-amber-700 block mt-1">{stats.angleCount}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Purchased</span>
-              <span className="text-xl font-black text-amber-700 block mt-1">{stats.purchasedCount}</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-indigo-50/30 border-indigo-200">
+              <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider block">Purchased</span>
+              <span className="text-xl font-black text-indigo-700 block mt-1">{stats.purchasedCount}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Compressor</span>
-              <span className="text-xl font-black text-purple-700 block mt-1">{stats.compressorCount}</span>
+            <div className="card-3d-interactive p-3.5 bg-linear-to-b from-white to-rose-50/30 border-rose-200">
+              <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider block">Compressor</span>
+              <span className="text-xl font-black text-rose-700 block mt-1">{stats.compressorCount}</span>
             </div>
           </div>
 
-          {/* Filters Bar */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Filters Bar 3D Card */}
+          <div className="card-3d p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border-slate-200/90">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
@@ -728,16 +730,16 @@ export default function MaterialMaster() {
                 placeholder="Search component name, grade, pipe gauge, or specs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-emerald-500 focus:bg-white focus:outline-none text-xs font-medium"
+                className="w-full bg-slate-50/60 text-slate-900 placeholder-slate-400 pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-500/15 focus:outline-none text-xs font-semibold transition-all"
               />
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-bold shrink-0">Counter Type:</span>
+              <span className="text-xs text-slate-500 font-black shrink-0">Counter Type:</span>
               <select
                 value={counterTypeFilter}
                 onChange={(e) => setCounterTypeFilter(e.target.value)}
-                className="bg-slate-50 text-slate-900 px-3 py-2 rounded-lg border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-bold"
+                className="bg-slate-50/80 text-slate-900 px-3 py-2 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs font-bold shadow-2xs"
               >
                 <option value="All">All Counter Types</option>
                 {allAvailableCounterTypes.map(ct => (
@@ -747,11 +749,11 @@ export default function MaterialMaster() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-bold shrink-0">Category:</span>
+              <span className="text-xs text-slate-500 font-black shrink-0">Category:</span>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="bg-slate-50 text-slate-900 px-3 py-2 rounded-lg border border-slate-200 focus:border-emerald-500 focus:outline-none text-xs font-bold"
+                className="bg-slate-50/80 text-slate-900 px-3 py-2 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs font-bold shadow-2xs"
               >
                 <option value="All">All Categories</option>
                 <option value="Sheet">Sheet Materials</option>
@@ -763,23 +765,23 @@ export default function MaterialMaster() {
             </div>
           </div>
 
-          {/* Materials Table */}
+          {/* Materials Table 3D Card */}
           {loading && materials.length === 0 ? (
-            <div className="flex items-center justify-center py-20 bg-white border border-slate-200 rounded-xl">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+            <div className="card-3d flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
             </div>
           ) : filteredMaterials.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl py-16 text-center shadow-xs">
-              <p className="text-slate-500 text-xs font-semibold">No materials match the selected filters.</p>
+            <div className="card-3d py-16 text-center border-dashed">
+              <p className="text-slate-500 text-xs font-bold">No materials match the selected filters.</p>
               <button
                 onClick={() => { setSearchQuery(''); setCategoryFilter('All'); setCounterTypeFilter('All'); }}
-                className="mt-3 text-xs text-emerald-600 font-bold hover:underline cursor-pointer"
+                className="btn-3d btn-3d-slate mt-3 px-4 py-1.5 text-xs font-bold inline-flex items-center"
               >
                 Reset Filters
               </button>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="card-3d overflow-hidden p-0 border-slate-200/90 shadow-md">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
@@ -793,12 +795,13 @@ export default function MaterialMaster() {
                       <th className="py-3 px-3 text-center">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-800">
+                  <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
                     {filteredMaterials.map((mat) => {
                       const isPurchased = mat.category === 'Purchased';
                       const isSheet = mat.category === 'Sheet';
                       const isPipe = mat.category === 'Pipe';
                       const isAngle = mat.category === 'Angle';
+                      const isCompressor = mat.category === 'Compressor' || mat.category === 'Special';
                       const counterTypesCount = Array.isArray(mat.counterTypes) ? mat.counterTypes.length : 0;
 
                       return (
@@ -814,11 +817,12 @@ export default function MaterialMaster() {
                           </td>
 
                           <td className="py-3 px-3 whitespace-nowrap">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                              isSheet ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                              isPipe ? 'bg-cyan-50 text-cyan-800 border-cyan-200' :
-                              isAngle ? 'bg-indigo-50 text-indigo-800 border-indigo-200' :
-                              'bg-amber-50 text-amber-800 border-amber-200'
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                              isSheet ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                              isPipe ? 'bg-sky-50 text-sky-800 border-sky-200' :
+                              isAngle ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                              isCompressor ? 'bg-rose-50 text-rose-800 border-rose-200' :
+                              'bg-indigo-50 text-indigo-800 border-indigo-200'
                             }`}>
                               {mat.category || 'Sheet'}
                             </span>
@@ -834,19 +838,26 @@ export default function MaterialMaster() {
                             {isPipe && (
                               <div className="space-y-0.5">
                                 <span className="font-bold text-slate-700 block">{mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304'}</span>
-                                {mat.pipeSize && <span className="text-[10px] text-cyan-700 font-semibold block">{mat.pipeSize}</span>}
+                                {mat.pipeSize && <span className="text-[10px] text-sky-700 font-semibold block">{mat.pipeSize}</span>}
                               </div>
                             )}
                             {isAngle && (
                               <div className="space-y-0.5">
                                 <span className="font-bold text-slate-700 block">{mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304'}</span>
-                                <span className="text-[10px] text-indigo-700 font-semibold block">{mat.gauge || '25 × 3 mm'}</span>
+                                <span className="text-[10px] text-amber-700 font-semibold block">{mat.gauge || '25 × 3 mm'}</span>
                               </div>
                             )}
                             {isPurchased && (
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-amber-800 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                                <span className="text-[10px] text-indigo-800 font-bold bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
                                   Purchased Item
+                                </span>
+                              </div>
+                            )}
+                            {isCompressor && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-rose-800 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                                  Refrigeration Unit
                                 </span>
                               </div>
                             )}
@@ -863,7 +874,7 @@ export default function MaterialMaster() {
                                   </span>
                                 ))}
                                 {counterTypesCount > 2 && (
-                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
                                     +{counterTypesCount - 2} more
                                   </span>
                                 )}
@@ -872,14 +883,14 @@ export default function MaterialMaster() {
                           </td>
 
                           <td className="py-3 px-3 text-right">
-                            <span className="font-bold text-slate-900 block">
+                            <span className="font-black text-slate-900 block">
                               {mat.price ? `₹ ${mat.price}` : '—'}
                             </span>
                             <span className="text-[10px] text-slate-400 block font-normal">per {mat.unit || 'kg'}</span>
                           </td>
 
                           <td className="py-3 px-3 text-center">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border ${
                               mat.status === 'Active'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -889,17 +900,17 @@ export default function MaterialMaster() {
                           </td>
 
                           <td className="py-3 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => handleOpenEditProductModal(mat)}
-                                className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-teal-200"
                                 title="Edit Product"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => handleDeleteProduct(mat._id, mat.materialName)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
                                 title="Delete Product"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -922,7 +933,7 @@ export default function MaterialMaster() {
       {/* ========================================================================= */}
       {activeSubTab === 'counterTypes' && (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex items-center justify-between gap-4">
+          <div className="card-3d p-4 flex items-center justify-between gap-4 border-slate-200/90">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
@@ -930,7 +941,7 @@ export default function MaterialMaster() {
                 placeholder="Search counter types..."
                 value={counterTypeSearch}
                 onChange={(e) => setCounterTypeSearch(e.target.value)}
-                className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-emerald-500 focus:bg-white focus:outline-none text-xs font-medium"
+                className="w-full bg-slate-50/60 text-slate-900 placeholder-slate-400 pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-slate-800 focus:bg-white focus:ring-2 focus:ring-slate-900/15 focus:outline-none text-xs font-semibold transition-all"
               />
             </div>
           </div>
@@ -944,11 +955,11 @@ export default function MaterialMaster() {
               const purCount = assignedMaterials.filter(m => (m.category || '').toLowerCase() === 'purchased').length;
 
               return (
-                <div key={ct._id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
+                <div key={ct._id} className="card-3d-interactive p-5 flex flex-col justify-between border-slate-200/90">
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-sm text-slate-900 tracking-tight">{ct.name}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      <h3 className="font-black text-sm text-slate-900 tracking-tight">{ct.name}</h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
                         ct.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}>
                         {ct.status}
@@ -961,18 +972,18 @@ export default function MaterialMaster() {
 
                     {/* Component Composition Tags */}
                     <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
                         {sheetCount} Sheets
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
                         {pipeCount} Pipes
                       </span>
                       {angleCount > 0 && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
                           {angleCount} Angles
                         </span>
                       )}
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">
                         {purCount} Purchased
                       </span>
                     </div>
@@ -981,23 +992,23 @@ export default function MaterialMaster() {
                   <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
                     <button
                       onClick={() => handleOpenManageCounterTypeMaterials(ct)}
-                      className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                      className="btn-3d btn-3d-slate px-3 py-1.5 text-xs text-teal-700 hover:text-teal-900"
                     >
-                      <Settings2 className="w-3.5 h-3.5" />
-                      Configure Components ({assignedMaterials.length})
+                      <Settings2 className="w-3.5 h-3.5 mr-1" />
+                      Configure ({assignedMaterials.length})
                     </button>
 
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenEditCounterTypeModal(ct)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                         title="Edit Details"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteCounterType(ct._id, ct.name)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Delete Counter Type"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

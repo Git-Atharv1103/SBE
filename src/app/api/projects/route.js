@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getProjects, getProjectById, createProject, updateProject, deleteProject } from '@/lib/db';
+import { getProjects, getProjectById, createProject, updateProject, deleteProject, getNextEstimateNumber } from '@/lib/db';
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const action = searchParams.get('action');
+    const nextNumber = searchParams.get('nextEstimateNumber');
+    
+    if (action === 'nextEstimateNumber' || nextNumber === 'true') {
+      const nextEst = await getNextEstimateNumber();
+      return NextResponse.json({ nextEstimateNumber: nextEst });
+    }
     
     if (id) {
       const project = await getProjectById(id);
