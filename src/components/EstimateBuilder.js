@@ -17,7 +17,10 @@ import {
   Wrench,
   Scale,
   PlusCircle,
-  Cpu
+  Cpu,
+  Ruler,
+  FileText,
+  Bug
 } from 'lucide-react';
 import {
   COUNTER_TYPES,
@@ -48,6 +51,7 @@ import {
   formatPurchasedPrice
 } from '@/lib/calculations';
 import { generateQuotationPDF } from '@/lib/pdfGenerator';
+import Counter3DPreview from '@/components/3d/Counter3DPreview';
 
 export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -179,9 +183,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     const targetKey = (config.hasSubtypes && counterSubtype) ? counterSubtype : counterType;
 
     // Filter active products configured for this Counter Type / Subtype in Material Master
-    const configuredMaterials = (allMaterials || []).filter(m => 
+    const configuredMaterials = (allMaterials || []).filter(m =>
       m.status !== 'Inactive' &&
-      Array.isArray(m.counterTypes) && 
+      Array.isArray(m.counterTypes) &&
       (m.counterTypes.includes(targetKey) || m.counterTypes.includes(counterType))
     );
 
@@ -192,8 +196,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
         .sort((a, b) => (a.order || 0) - (b.order || 0))
         .map((m, idx) => {
           let gaugeOpts = Array.isArray(m.gaugeOptions) && m.gaugeOptions.length > 0 ? m.gaugeOptions : null;
-          let initialGauge = m.gauge !== undefined && m.gauge !== null && m.gauge !== '' 
-            ? parseFloat(m.gauge) 
+          let initialGauge = m.gauge !== undefined && m.gauge !== null && m.gauge !== ''
+            ? parseFloat(m.gauge)
             : (gaugeOpts ? gaugeOpts[0] : '');
 
           return {
@@ -241,21 +245,61 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           quantity: ''
         }));
 
-      // Set sheets, pipes, and angles from template
+      // 4. Purchased Items (Auto-fetched from Material Master for this Counter Type)
+      const purchasedRows = configuredMaterials
+        .filter(m => (m.category || '').toLowerCase() === 'purchased' || (m.calculationType || '').toLowerCase() === 'purchased')
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((m, idx) => {
+          const dropdownOpts = Array.isArray(m.dropdownOptions) && m.dropdownOptions.length > 0
+            ? m.dropdownOptions
+            : (Array.isArray(m.options) && m.options.length > 0 ? m.options : getItemSizeOptions(m.materialName));
+          return {
+            id: `purchased-${m._id || idx}-${Date.now()}-${idx}`,
+            materialId: m._id,
+            material: m.materialName,
+            calculationType: 'purchased',
+            dropdownOptions: dropdownOpts,
+            allowMultiple: Boolean(m.allowMultiple) || (dropdownOpts && dropdownOpts.length > 0),
+            size: dropdownOpts && dropdownOpts.length > 0 ? dropdownOpts[0] : '',
+            quantity: '',
+            price: m.price !== null && m.price !== undefined ? String(m.price) : ''
+          };
+        });
+
+      // 5. Compressor Items (Auto-fetched from Material Master for this Counter Type)
+      const compressorRows = configuredMaterials
+        .filter(m => (m.category || '').toLowerCase() === 'compressor' || (m.calculationType || '').toLowerCase() === 'compressor' || (m.category || '').toLowerCase() === 'special')
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((m, idx) => {
+          const dropdownOpts = Array.isArray(m.dropdownOptions) && m.dropdownOptions.length > 0 ? m.dropdownOptions : null;
+          return {
+            id: `comp-${m._id || idx}-${Date.now()}-${idx}`,
+            materialId: m._id,
+            material: m.materialName,
+            calculationType: 'compressor',
+            category: 'Compressor',
+            dropdownOptions: dropdownOpts,
+            allowMultiple: Boolean(m.allowMultiple),
+            size: dropdownOpts && dropdownOpts.length > 0 ? dropdownOpts[0] : '',
+            quantity: '',
+            price: m.price !== null && m.price !== undefined ? String(m.price) : ''
+          };
+        });
+
+      // Set sheets, pipes, angles, purchased, and compressor from template
       setSheets(sheetRows);
       setPipes(pipeRows);
       setAngles(angleRows);
-      // Purchased and compressor items are explicitly added by the user as needed
-      setPurchased([]);
-      setCompressor([]);
+      setPurchased(purchasedRows);
+      setCompressor(compressorRows);
     } else {
       // Fallback from central templates
       const fallback = getFallbackCounterTemplate(targetKey);
       setSheets(JSON.parse(JSON.stringify(fallback.sheets || [])));
       setPipes(JSON.parse(JSON.stringify(fallback.pipes || [])));
       setAngles(JSON.parse(JSON.stringify(fallback.angles || [])));
-      setPurchased([]);
-      setCompressor([]);
+      setPurchased(JSON.parse(JSON.stringify(fallback.purchased || [])));
+      setCompressor(JSON.parse(JSON.stringify(fallback.compressor || [])));
     }
   }, [masterMaterials]);
 
@@ -342,6 +386,63 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       gst: gstVal
     });
   }, [sheets, pipes, angles, purchased, compressor, pricingInputs]);
+
+  // Dynamic Quotation / Bill Line Items (Fabricated Equipment + ONLY user-entered Purchase & Compressor Items)
+  const quotationBillItems = useMemo(() => {
+    const items = [];
+
+    // 1. Fabricated Equipment Item (Material Cost + Labour Cost)
+    const mainEquipmentName = clientData.counterSubtype
+      ? `${clientData.counterType || 'Commercial Kitchen Equipment'} (${clientData.counterSubtype})`
+      : (clientData.counterType || 'Commercial Kitchen Equipment');
+
+    let dimText = '';
+    const topSheet = (sheets || []).find(s => {
+      const n = (s.material || '').toLowerCase();
+      return n.includes('top') || n === 'sheet' || (s.length && s.width);
+    });
+    if (topSheet && topSheet.length && topSheet.width) {
+      dimText = `${topSheet.length}" × ${topSheet.width}"`;
+    }
+
+    const mainRate = calculation.materialCost + calculation.labourCost;
+    items.push({
+      srNo: 1,
+      particulars: mainEquipmentName,
+      spec: dimText ? `Fabricated SS Equipment • Size: ${dimText}` : 'Fabricated Stainless Steel Equipment',
+      quantity: 1,
+      rate: mainRate,
+      amount: mainRate,
+      type: 'fabricated'
+    });
+
+    // 2. Purchased & Compressor Items (ONLY rows with valid material and quantity > 0 entered by the user)
+    const validPurchased = [...(purchased || []), ...(compressor || [])].filter(p => {
+      if (!p || !p.material || !String(p.material).trim()) return false;
+      const q = parseFloat(p.quantity);
+      return !isNaN(q) && q > 0;
+    });
+
+    validPurchased.forEach((p, idx) => {
+      const q = parseFloat(p.quantity) || 1;
+      const rate = parseFloat(p.price) || 0;
+      const amount = calculatePurchasedItemPrice(q, rate) !== null ? calculatePurchasedItemPrice(q, rate) : (q * rate);
+      const spec = p.size ? `Size / Model: ${p.size}` : '';
+
+      items.push({
+        srNo: idx + 2,
+        particulars: p.material,
+        spec,
+        quantity: q,
+        rate,
+        amount,
+        type: p.calculationType || 'purchased',
+        id: p.id
+      });
+    });
+
+    return items;
+  }, [clientData.counterType, clientData.counterSubtype, sheets, purchased, compressor, calculation.materialCost, calculation.labourCost]);
 
   // Sheet Row Handlers
   const updateSheetRow = (index, field, value) => {
@@ -544,8 +645,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
         }
       ]);
     } else {
-      const dropdownOpts = Array.isArray(mat.dropdownOptions) && mat.dropdownOptions.length > 0 
-        ? mat.dropdownOptions 
+      const dropdownOpts = Array.isArray(mat.dropdownOptions) && mat.dropdownOptions.length > 0
+        ? mat.dropdownOptions
         : (Array.isArray(mat.options) && mat.options.length > 0 ? mat.options : getItemSizeOptions(mat.materialName));
       setPurchased(prev => [
         ...prev,
@@ -623,7 +724,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
     try {
       setLoading(true);
-      const displayProjectName = clientData.counterSubtype 
+      const displayProjectName = clientData.counterSubtype
         ? `${clientData.counterType} (${clientData.counterSubtype}) - ${clientData.customerName}`
         : `${clientData.counterType} - ${clientData.customerName}`;
 
@@ -772,11 +873,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-36 text-slate-800">
       {/* Toast Notification */}
       {statusMessage && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl border shadow-xl animate-in fade-in slide-in-from-top-4 duration-200 ${
-          statusMessage.type === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
-          statusMessage.type === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' :
-          'bg-rose-50 border-rose-300 text-rose-800'
-        }`}>
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl border shadow-xl animate-in fade-in slide-in-from-top-4 duration-200 ${statusMessage.type === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
+            statusMessage.type === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' :
+              'bg-rose-50 border-rose-300 text-rose-800'
+          }`}>
           {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" /> : <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />}
           <span className="text-xs font-bold">{statusMessage.text}</span>
         </div>
@@ -835,26 +935,26 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       {/* Modern 3D 3-Step Wizard Navigation */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
         {[
-          { 
-            step: 1, 
-            label: 'Step 1', 
-            name: 'Client & Counter Selection', 
+          {
+            step: 1,
+            label: 'Step 1',
+            name: 'Client & Counter Selection',
             activeStyle: 'bg-linear-to-r from-blue-50/90 to-indigo-50/60 border-blue-400 text-blue-900 shadow-sm ring-2 ring-blue-500/15',
             badgeActive: 'bg-blue-600 text-white shadow-xs',
             themeColor: 'text-blue-600'
           },
-          { 
-            step: 2, 
-            label: 'Step 2', 
-            name: 'Material Specifications', 
+          {
+            step: 2,
+            label: 'Step 2',
+            name: 'Material Specifications',
             activeStyle: 'bg-linear-to-r from-teal-50/90 to-cyan-50/60 border-teal-400 text-teal-900 shadow-sm ring-2 ring-teal-500/15',
             badgeActive: 'bg-teal-600 text-white shadow-xs',
             themeColor: 'text-teal-600'
           },
-          { 
-            step: 3, 
-            label: 'Step 3', 
-            name: 'Weight & Pricing Summary', 
+          {
+            step: 3,
+            label: 'Step 3',
+            name: 'Weight & Pricing Summary',
             activeStyle: 'bg-linear-to-r from-violet-50/90 to-purple-50/60 border-violet-400 text-violet-900 shadow-sm ring-2 ring-violet-500/15',
             badgeActive: 'bg-violet-600 text-white shadow-xs',
             themeColor: 'text-violet-600'
@@ -865,11 +965,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             <button
               key={s.step}
               onClick={() => setCurrentStep(s.step)}
-              className={`card-3d-interactive flex items-center justify-between p-4 text-left cursor-pointer transition-all ${
-                isActive 
-                  ? `${s.activeStyle} border-2` 
+              className={`card-3d-interactive flex items-center justify-between p-4 text-left cursor-pointer transition-all ${isActive
+                  ? `${s.activeStyle} border-2`
                   : 'bg-white hover:bg-slate-50/80 border-slate-200'
-              }`}
+                }`}
             >
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest block text-slate-400">
@@ -879,9 +978,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   {s.name}
                 </span>
               </div>
-              <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 transition-all ${
-                isActive ? s.badgeActive : 'bg-slate-100 text-slate-500 border border-slate-200'
-              }`}>
+              <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 transition-all ${isActive ? s.badgeActive : 'bg-slate-100 text-slate-500 border border-slate-200'
+                }`}>
                 {s.step}
               </span>
             </button>
@@ -1084,8 +1182,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             <div className="card-3d p-12 text-center">
               <AlertCircle className="w-9 h-9 text-amber-500 mx-auto mb-2" />
               <p className="text-xs text-slate-700 font-bold">
-                {!clientData.counterType 
-                  ? 'Please select a Counter Type in Step 1 to load material specifications.' 
+                {!clientData.counterType
+                  ? 'Please select a Counter Type in Step 1 to load material specifications.'
                   : `Please select ${currentCounterConfig.subtypeLabel} in Step 1 to load material specifications.`}
               </p>
               <button
@@ -1097,6 +1195,21 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             </div>
           ) : (
             <>
+              {/* Estimate & Component Counts Verification Bar */}
+              <div className="px-4 py-2.5 bg-slate-900 text-slate-200 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono shadow-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">Estimate:</span>
+                  <span className="text-white font-bold bg-slate-800 px-2.5 py-0.5 rounded border border-slate-700">{clientData.estimateNumber}</span>
+                </div>
+                <div className="flex items-center gap-3.5 flex-wrap">
+                  <span className="text-slate-300">Sheets: <strong className="text-teal-400 font-bold">{sheets.length}</strong></span>
+                  <span className="text-slate-300">Pipes: <strong className="text-sky-400 font-bold">{pipes.length}</strong></span>
+                  <span className="text-slate-300">Angles: <strong className="text-amber-400 font-bold">{angles.length}</strong></span>
+                  <span className="text-slate-300">Purchase Items: <strong className="text-indigo-400 font-bold">{purchased.length}</strong></span>
+                  <span className="text-slate-300">Refrigeration: <strong className="text-rose-400 font-bold">{compressor.length}</strong></span>
+                </div>
+              </div>
+
               {/* 1. SHEET MATERIALS TABLE (TEAL / CYAN THEME) */}
               <div className="card-3d p-5 w-full border-teal-200/80 bg-linear-to-b from-white to-teal-50/10">
                 <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
@@ -1560,8 +1673,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                         {purchased.map((row, idx) => {
                           const totalPrice = calculatePurchasedItemPrice(row.quantity, row.price);
                           const totalPriceDisplay = totalPrice !== null ? formatPurchasedPrice(totalPrice) : '—';
-                          const opts = Array.isArray(row.dropdownOptions) && row.dropdownOptions.length > 0 
-                            ? row.dropdownOptions 
+                          const opts = Array.isArray(row.dropdownOptions) && row.dropdownOptions.length > 0
+                            ? row.dropdownOptions
                             : getItemSizeOptions(row.material);
 
                           return (
@@ -1784,6 +1897,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   </div>
                 )}
               </div>
+
+              {/* ========================================================================= */}
+              {/* 3D STRUCTURE PREVIEW (PARAMETRIC INTERACTIVE MODEL) */}
+              {/* ========================================================================= */}
+              <Counter3DPreview
+                counterType={clientData.counterType}
+                counterSubtype={clientData.counterSubtype}
+                sheets={sheets}
+                pipes={pipes}
+                angles={angles}
+                purchased={purchased}
+                compressor={compressor}
+              />
             </>
           )}
 
@@ -1931,6 +2057,66 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     Back to Material Specification
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Dynamic Quotation / Bill Items Breakdown Table */}
+            <div className="card-3d p-6 lg:p-7 border-slate-200/90 bg-white">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                    <FileText className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Quotation / Bill Items Breakdown
+                    </h3>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Dynamically rendered for Estimate: <strong className="text-slate-800 font-mono">{clientData.estimateNumber}</strong>
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                  {quotationBillItems.length} Line Item(s)
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
+                      <th className="py-2.5 px-3 text-center w-14">Sr. No.</th>
+                      <th className="py-2.5 px-3">Particulars & Description</th>
+                      <th className="py-2.5 px-3 text-center w-20">Qty</th>
+                      <th className="py-2.5 px-3 text-right w-32">Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right w-36">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
+                    {quotationBillItems.map((item) => (
+                      <tr key={item.srNo} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-500">
+                          {item.srNo}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="font-bold text-slate-900 block">{item.particulars}</span>
+                          {item.spec && (
+                            <span className="text-[11px] text-slate-500 block mt-0.5">{item.spec}</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold font-mono">
+                          {item.quantity}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-700">
+                          {formatCurrency(item.rate)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-black font-mono text-slate-900">
+                          {formatCurrency(item.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2104,11 +2290,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     <button
                       key={cat}
                       onClick={() => setSelectedCatalogCategory(cat)}
-                      className={`px-2 py-0.5 rounded font-bold cursor-pointer ${
-                        selectedCatalogCategory === cat 
-                          ? 'bg-slate-800 text-white' 
+                      className={`px-2 py-0.5 rounded font-bold cursor-pointer ${selectedCatalogCategory === cat
+                          ? 'bg-slate-800 text-white'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       {cat}
                     </button>
@@ -2132,13 +2317,12 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       className="w-full flex items-center justify-between p-2.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30 text-left transition-all group cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          mat.category === 'Sheet' ? 'bg-emerald-600' :
-                          mat.category === 'Pipe' ? 'bg-cyan-600' :
-                          mat.category === 'Angle' ? 'bg-indigo-600' :
-                          (mat.category === 'Compressor' || mat.category === 'Special') ? 'bg-purple-600' :
-                          'bg-amber-500'
-                        }`}></div>
+                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${mat.category === 'Sheet' ? 'bg-emerald-600' :
+                            mat.category === 'Pipe' ? 'bg-cyan-600' :
+                              mat.category === 'Angle' ? 'bg-indigo-600' :
+                                (mat.category === 'Compressor' || mat.category === 'Special') ? 'bg-purple-600' :
+                                  'bg-amber-500'
+                          }`}></div>
                         <div>
                           <span className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 block">
                             {mat.materialName}
