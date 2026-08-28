@@ -38,25 +38,28 @@ export async function GET() {
     // 2. Seed Counter Types Master Table
     let counterTypes = await getCounterTypes();
     const counterTypeDescriptions = {
+      'Working Table': 'Commercial Heavy Duty Work & Prep Table with Storage',
+      'Table': 'Commercial Heavy Duty Work & Prep Table',
+      'Sink Unit': 'Single / Double Sink Washing Station with Depth Control',
+      'Sink Unit with Table': 'Integrated Sink & Preparation Worktable with Depth Control',
+      'Storage': 'Multi-compartment Onion/Potato & Grain Ventilated Storage Bins',
+      'Storage Bin': 'Multi-compartment Onion/Potato & Grain Ventilated Storage Bins',
       'SS Dish Rack': 'Commercial Clean Dish & Plate Tier Storage Rack',
       'Dish Rack': 'Slotted SS Clean Dish Storage Rack',
       'Pot Rack': 'Commercial Heavy Vessel, Pot & Pan Storage Framework',
       'Dining Table': 'Heavy Duty Canteen & Restaurant Dining Table with Stool Arms',
       'Bench': 'SS Commercial Dining & Waiting Bench with Ergonomic Back Support',
-      'Storage Bin': 'Multi-compartment Onion, Potato & Grain Ventilated Storage Bins',
-      'Counter': 'Multi-tier Food Service, Bain Marie, Display & Work Counter',
-      'Counters': 'Multi-tier Display, Bain Marie & Storage Showcase',
       'Trolley': 'Heavy Commercial Material Handling & Kitchen Service Trolley',
-      'Fridge': 'Commercial Vertical & Horizontal Refrigeration Cabinets',
-      'Table': 'Commercial Heavy Duty Work & Prep Table',
-      'Sink Unit': 'Single / Double Sink Washing Station',
-      'Sink Unit with Table': 'Integrated Sink & Preparation Worktable',
+      'Fridge': 'Commercial Vertical, Pizza Makeline & Work Top Refrigeration Cabinets',
       'Soiled Dish Table': 'Scraping, Pre-wash & Dish Receiving Station',
-      'Gas Range': 'Commercial Burner Gas Cooking Range',
-      'Dosa Bhatti': 'Heavy Duty Commercial Griddle & Bhatti',
+      'Gas Range': 'Commercial Burner Gas Cooking Range with Structural Angle Base',
+      'Dosa Bhatti': 'Heavy Duty Commercial Griddle & Bhatti with MS Plate',
       'SS Tandoor': 'Insulated Stainless Steel Charcoal / Gas Tandoor',
-      'Shawarma Cabin': 'Commercial Shawarma Rotisserie & Cabin Unit',
-      'Chapati Puffer Plate': 'Puffer Hotplate Roti / Chapati Station'
+      'Bain Marie': 'Commercial Hot Bain Marie Food Warming Counter with Pan Railing',
+      'GN Pan / Round Pot / Vessel': 'Food Service Display & Multi-pot Bain Counter',
+      'Tea Counter': 'Commercial Tea Service Counter with 3-Side Covering & Drawers',
+      'Chapati Plate': 'Puffer Hotplate & Griddle Roti / Chapati Station',
+      'Shawarma Cabin': 'Commercial Shawarma Rotisserie & Cabin Unit'
     };
 
     if (!counterTypes || counterTypes.length < COUNTER_TYPES.length) {

@@ -141,14 +141,14 @@ body {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
-/* Hide HTML5 number input increase/decrease arrows */
-.no-spinner::-webkit-outer-spin-button,
-.no-spinner::-webkit-inner-spin-button {
+/* Hide browser number-input increase/decrease spinner arrows globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.no-spinner {
+input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }

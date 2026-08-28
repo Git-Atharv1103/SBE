@@ -1,44 +1,20 @@
 /**
- * Shree Balaji Enterprises — Professional Commercial Kitchen Equipment Quotation Generator
- * Generates print-ready A4 commercial quotation documents with dynamic multi-page flow.
+ * Shree Balaji Enterprises — Professional Customer-Facing Quotation & Bill Generator
+ * 
+ * SPECIFICATIONS:
+ * - A4 Portrait format (210mm x 297mm) with proper 16mm margins (178mm printable content width).
+ * - Full Unicode font support (Roboto Regular & Bold) for flawless Indian Rupee (₹) rendering.
+ * - Customer-facing quotation table contains ONLY: | Sr. No. | Counter Name | Qty | Amount (₹) |
+ * - NEVER includes internal material calculations, weights, rates, labor, or markup percentages.
+ * - Dynamic estimate numbers, client names, counter names, quantities, and selling prices.
+ * - Indian number formatting (e.g. ₹ 16,565.16) and Indian currency words conversion.
  */
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { registerFonts } from './fonts/roboto.js';
 import { COMPANY_DETAILS, DEFAULT_TERMS_AND_CONDITIONS } from './constants.js';
 import { calculateEstimate, formatCurrency, numberToWords } from './calculations.js';
-
-/**
- * Helper to extract size and dimension description from estimate sheets/components
- * @param {Object} estimateData 
- * @returns {string} Formatted size / spec string
- */
-function getEquipmentSizeSpec(estimateData) {
-  const sheets = Array.isArray(estimateData.sheets) ? estimateData.sheets : [];
-  
-  // Find top sheet or primary sheet
-  const primarySheet = sheets.find(s => s.length && s.width) || sheets[0];
-  const grade = (primarySheet && primarySheet.grade) ? `SS ${primarySheet.grade} Grade` : 'SS 304 Grade';
-  
-  const parts = [];
-  if (primarySheet && primarySheet.length && primarySheet.width) {
-    const l = primarySheet.length;
-    const w = primarySheet.width;
-    parts.push(`Size: ${l}" (L) × ${w}" (W) × 34" (H)`);
-  } else if (estimateData.size) {
-    parts.push(`Size: ${estimateData.size}`);
-  }
-
-  if (grade) {
-    parts.push(grade);
-  }
-
-  if (primarySheet && primarySheet.gauge) {
-    parts.push(`Sheet Thickness: ${primarySheet.gauge} mm`);
-  }
-
-  return parts.join(' • ');
-}
 
 /**
  * Formats a sanitized and safe quotation PDF filename
@@ -52,7 +28,6 @@ export function getQuotationFileName(customerName, estimateNumber) {
   const rawEstNum = (estimateNumber || 'EST 01').trim();
 
   // Sanitize Windows invalid filename characters: < > : " / \ | ? *
-  // Specifically replace '/' and '\' with ' - ' per requirement: "ABC / XYZ Hotel" -> "ABC - XYZ Hotel"
   const cleanCustomer = rawCustomer
     .replace(/[/\\]+/g, ' - ')
     .replace(/[<>:"|?*]/g, '')
@@ -69,7 +44,17 @@ export function getQuotationFileName(customerName, estimateNumber) {
 }
 
 /**
- * Generate Professional A4 Commercial Quotation PDF for Shree Balaji Enterprises
+ * Helper to format currency numbers to Indian format with ₹ symbol
+ * @param {number|string} amount 
+ * @returns {string} e.g. "₹ 16,565.16"
+ */
+function formatRupee(amount) {
+  const val = parseFloat(amount) || 0;
+  return `₹ ${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Generate Professional Customer-Facing A4 Quotation PDF for Shree Balaji Enterprises
  * @param {Object} estimateData - Full estimate project object
  * @param {Object} [options]
  * @param {boolean} [options.shouldPrint=false] - Whether to trigger browser print dialog
@@ -78,18 +63,25 @@ export function getQuotationFileName(customerName, estimateNumber) {
 export function generateQuotationPDF(estimateData, options = {}) {
   const { shouldPrint = false } = options;
 
+  // Initialize A4 Portrait Document (210mm x 297mm)
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4'
+    format: 'a4',
+    compress: true
   });
+
+  // Register Unicode Roboto Fonts (Supports Indian Rupee Symbol ₹)
+  registerFonts(doc);
 
   const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
   const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
-  const margin = 12; // 12mm left and right margin
-  const contentWidth = pageWidth - (margin * 2); // 186mm
+  const margin = 16; // 16mm Left and Right Margin
+  const topMargin = 13; // 13mm Top Margin
+  const bottomMargin = 15; // 15mm Bottom Margin
+  const contentWidth = pageWidth - (margin * 2); // 178mm Content Width
 
-  // Flatten all material components for calculation
+  // Flatten material items to run accurate internal calculation if needed
   const sheets = Array.isArray(estimateData.sheets) ? estimateData.sheets : [];
   const pipes = Array.isArray(estimateData.pipes) ? estimateData.pipes : [];
   const angles = Array.isArray(estimateData.angles) ? estimateData.angles : [];
@@ -102,480 +94,504 @@ export function generateQuotationPDF(estimateData, options = {}) {
     materials: allRows,
     totalMaterialWeight: estimateData.totalMaterialWeight,
     materialRate: estimateData.materialRate,
+    sheetRate: estimateData.sheetRate,
+    pipeRate: estimateData.pipeRate,
+    angleRate: estimateData.angleRate,
+    labourRate: estimateData.labourRate,
     labourCost: estimateData.labourCost,
+    sellingPercentage: estimateData.sellingPercentage,
+    counterQuantity: estimateData.counterQuantity,
     discount: estimateData.discount,
     gst: estimateData.gst
   });
 
-  const estNumber = estimateData.estimateNumber || 'EST 01';
-  const estDate = estimateData.date
-    ? new Date(estimateData.date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const estNumber = (estimateData.estimateNumber || estimateData.projectNumber || 'EST 01').trim();
+  
+  // Format Date (DD/MM/YYYY)
+  let estDate = '';
+  if (estimateData.date) {
+    try {
+      const d = new Date(estimateData.date);
+      if (!isNaN(d.getTime())) {
+        estDate = d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+    } catch {
+      estDate = '';
+    }
+  }
+  if (!estDate) {
+    estDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  let currentY = topMargin;
 
   // -------------------------------------------------------------
-  // 1. COMPANY HEADER (ERP-Style Professional Layout)
+  // 1. TOP HEADER SECTION
   // -------------------------------------------------------------
-  let currentY = 10;
-
-  // Header Container Top Border
-  doc.setDrawColor(15, 23, 42); // slate-900
-  doc.setLineWidth(0.8);
-  doc.line(margin, currentY, margin + contentWidth, currentY);
+  // Header Accent Top Bar
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(margin, currentY, contentWidth, 1.2, 'F');
   currentY += 4;
 
-  // LEFT: SBE Logo Badge
+  const headerStartY = currentY;
+
+  // LEFT SIDE: Logo Emblem + Company Details
+  const logoWidth = 14;
+  const logoHeight = 14;
+  
+  // SBE Shield Logo Badge
   doc.setFillColor(15, 23, 42); // slate-900
-  doc.roundedRect(margin, currentY, 15, 15, 2, 2, 'F');
+  doc.roundedRect(margin, currentY, logoWidth, logoHeight, 2, 2, 'F');
   
   doc.setFillColor(16, 185, 129); // emerald-500
-  doc.circle(margin + 7.5, currentY + 7.5, 5.5, 'F');
+  doc.circle(margin + (logoWidth / 2), currentY + (logoHeight / 2), 4.8, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('SBE', margin + 3.8, currentY + 8.7);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(8);
+  doc.text('SBE', margin + (logoWidth / 2), currentY + (logoHeight / 2) + 1.1, { align: 'center' });
 
-  // CENTER: Company Name & Subtitle
-  const headerCenterLeft = margin + 18;
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13.5);
-  doc.text('SHREE BALAJI ENTERPRISES', headerCenterLeft, currentY + 4.2);
+  // Company Name & Subtitles
+  const headerTextX = margin + logoWidth + 3.5;
+  
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(13);
+  doc.text('SHREE BALAJI ENTERPRISES', headerTextX, currentY + 3.8);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(5, 150, 105); // emerald-600
-  doc.text('Commercial/Hotel Kitchen Equipment Manufacturer', headerCenterLeft, currentY + 8.2);
+  doc.text('Commercial/Hotel Kitchen Equipment Manufacturer', headerTextX, currentY + 7.8);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8);
-  doc.setTextColor(71, 85, 105);
-  doc.text('Canteen Equipment • Display Counters • Refrigeration • Exhaust Ventilation', headerCenterLeft, currentY + 11.8);
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105); // slate-600
+  doc.text('Canteen Equipment • Display Counters • Refrigeration • Exhaust Ventilation', headerTextX, currentY + 11.6);
 
-  // RIGHT: Quotation No & Date Box
-  const rightColX = margin + contentWidth;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text('QUOTATION', rightColX, currentY + 4.2, { align: 'right' });
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(30, 41, 59);
-  doc.text(`Quotation No: ${estNumber}`, rightColX, currentY + 8.5, { align: 'right' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text(`Date: ${estDate}`, rightColX, currentY + 12.2, { align: 'right' });
-
-  currentY += 16.5;
-
-  // Contact Details Ribbon
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, currentY, contentWidth, 9.5, 1, 1, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, currentY, contentWidth, 9.5, 1, 1, 'S');
-
-  doc.setFontSize(6.8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
+  // RIGHT SIDE: Quotation, Estimate No & Date (Vertically Aligned with Left Side)
+  const rightAlignX = margin + contentWidth;
   
-  const phoneStr = 'Phone: +91 9604386808 / +91 9422541505 / +91 9011127134   |   Office: +91 9604597979   |   Email: balajishree46@gmail.com';
-  doc.text(phoneStr, margin + 2.5, currentY + 3.8);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(13);
+  doc.text('QUOTATION', rightAlignX, currentY + 3.8, { align: 'right' });
 
-  const addrStr = 'Address: Sr. No - 2/1 Mangde Wadi - Katraj, Pune Satara Road, Near Indian Oil Petrol Pump, Katraj, Pune - 411046';
-  doc.text(addrStr, margin + 2.5, currentY + 7.5);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(30, 41, 59); // slate-800
+  doc.text(`Estimate No: ${estNumber}`, rightAlignX, currentY + 7.8, { align: 'right' });
 
-  currentY += 12;
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105); // slate-600
+  doc.text(`Date: ${estDate}`, rightAlignX, currentY + 11.6, { align: 'right' });
+
+  currentY += Math.max(logoHeight, 13) + 3;
 
   // -------------------------------------------------------------
-  // 2. CUSTOMER DETAILS & SUBJECT CARD
+  // 2. CONTACT INFORMATION SECTION (Clean 2-3 Lines Card)
   // -------------------------------------------------------------
-  const custBoxHeight = 26;
+  const contactCardY = currentY;
+  const contactCardHeight = 14;
+  
+  doc.setFillColor(248, 250, 252); // slate-50
+  doc.roundedRect(margin, contactCardY, contentWidth, contactCardHeight, 1.5, 1.5, 'F');
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, contactCardY, contentWidth, contactCardHeight, 1.5, 1.5, 'S');
+
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(7.2);
+  doc.setTextColor(51, 65, 85); // slate-700
+
+  // Line 1: Phones & Office
+  const phoneLine = 'Phone: +91 9604386808 / +91 9422541505 / +91 9011127134    |    Office: +91 9604597979';
+  doc.text(phoneLine, margin + 3.5, contactCardY + 4);
+
+  // Line 2: Email & Address (with natural wrapping if needed)
+  const emailAddrLine = 'Email: balajishree46@gmail.com    |    Address: Sr. No - 2/1 Mangde Wadi - Katraj, Pune Satara Road, Near Indian Oil Petrol Pump, Katraj, Pune - 411046';
+  const splitEmailAddr = doc.splitTextToSize(emailAddrLine, contentWidth - 7);
+  doc.text(splitEmailAddr, margin + 3.5, contactCardY + 8);
+
+  currentY = contactCardY + contactCardHeight + 3.5;
+
+  // -------------------------------------------------------------
+  // 3. CUSTOMER SECTION & SUBJECT
+  // -------------------------------------------------------------
+  const clientName = (
+    estimateData.customerName || 
+    estimateData.projectName || 
+    estimateData.clientName || 
+    'Valued Customer'
+  ).trim();
+
+  const custBoxY = currentY;
+  const custBoxHeight = 17;
+
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(margin, currentY, contentWidth, custBoxHeight, 1, 1, 'F');
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(margin, currentY, contentWidth, custBoxHeight, 1, 1, 'S');
+  doc.roundedRect(margin, custBoxY, contentWidth, custBoxHeight, 1.5, 1.5, 'F');
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, custBoxY, contentWidth, custBoxHeight, 1.5, 1.5, 'S');
 
-  // "To,"
-  doc.setFont('helvetica', 'bold');
+  // "To:"
+  doc.setFont('Roboto', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text('To,', margin + 3, currentY + 4.2);
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text('To:', margin + 3.5, custBoxY + 4.2);
 
-  // Customer Name
-  const clientName = estimateData.customerName || estimateData.projectName || 'Valued Customer';
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(clientName, margin + 3, currentY + 8.5);
+  // Customer Name (Bold & Distinct)
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(clientName, margin + 11, custBoxY + 4.2);
 
-  // Company Name / Address / Phone
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(51, 65, 85);
+  // Optional customer meta details on same card if available
+  const custMeta = [];
+  if (estimateData.companyName) custMeta.push(estimateData.companyName);
+  if (estimateData.phone) {
+    const rawDigits = String(estimateData.phone).replace(/\D/g, '');
+    const formattedPhone = rawDigits.length === 10
+      ? `+91 ${rawDigits.slice(0, 5)} ${rawDigits.slice(5)}`
+      : estimateData.phone;
+    custMeta.push(`Phone: ${formattedPhone}`);
+  }
+  if (estimateData.email) custMeta.push(`Email: ${estimateData.email}`);
   
-  let custLineY = currentY + 12.5;
-  if (estimateData.companyName) {
-    doc.text(estimateData.companyName, margin + 3, custLineY);
-    custLineY += 3.4;
+  if (custMeta.length > 0) {
+    doc.setFont('Roboto', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(custMeta.join('   •   '), margin + 11, custBoxY + 8);
   }
 
-  const addr = estimateData.address ? estimateData.address : '';
-  if (addr) {
-    const splitAddr = doc.splitTextToSize(`Address: ${addr}`, 115);
-    doc.text(splitAddr[0], margin + 3, custLineY);
-    custLineY += 3.4;
-  }
-
-  const phoneText = estimateData.phone ? `Phone: ${estimateData.phone}` : '';
-  const emailText = estimateData.email ? `Email: ${estimateData.email}` : '';
-  const contactCombined = [phoneText, emailText].filter(Boolean).join(' • ');
-  if (contactCombined && custLineY <= currentY + 19) {
-    doc.text(contactCombined, margin + 3, custLineY);
-  }
-
-  // Right Column of Customer Box: Counter / Equipment Spec
-  const rightCustX = margin + 120;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text('COUNTER / EQUIPMENT:', rightCustX, currentY + 4.2);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(15, 23, 42);
-  const equipHeading = estimateData.counterSubtype
-    ? `${estimateData.counterType || 'Commercial Kitchen Equipment'} (${estimateData.counterSubtype})`
-    : (estimateData.counterType || 'Commercial Kitchen Equipment');
-  
-  const splitEquip = doc.splitTextToSize(equipHeading, 62);
-  doc.text(splitEquip[0], rightCustX, currentY + 8.5);
-
-  // Subject Banner inside customer card
+  // Subject Banner at Bottom of Customer Box
+  const subjectBannerY = custBoxY + custBoxHeight - 6;
   doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY + custBoxHeight - 6, contentWidth, 6, 'F');
+  doc.roundedRect(margin, subjectBannerY, contentWidth, 6, 0, 0, 'F');
   doc.setDrawColor(226, 232, 240);
-  doc.line(margin, currentY + custBoxHeight - 6, margin + contentWidth, currentY + custBoxHeight - 6);
+  doc.line(margin, subjectBannerY, margin + contentWidth, subjectBannerY);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.8);
-  doc.setTextColor(30, 41, 59);
-  doc.text(`Subject: Quotation For ${equipHeading}`, margin + 3, currentY + custBoxHeight - 2);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59); // slate-800
+  doc.text('Subject: Quotation for Commercial Kitchen Equipment', margin + 3.5, subjectBannerY + 4.2);
 
-  currentY += custBoxHeight + 3.5;
+  currentY = custBoxY + custBoxHeight + 3.5;
 
   // -------------------------------------------------------------
-  // 3. PRODUCT TABLE (Sr. No. | Particular | Qty | Rate (Rs.) | Amount (Rs.))
+  // 4. CUSTOMER BILL TABLE
+  // Columns: | Sr. No. | Counter Name | Qty | Amount (₹) |
+  // Widths: 18mm (~10%), 96mm (~54%), 20mm (~11%), 44mm (~25%) = 178mm (100%)
   // -------------------------------------------------------------
   const tableHeaders = [
     [
       { content: 'Sr. No.', styles: { halign: 'center' } },
-      { content: 'Particular', styles: { halign: 'left' } },
+      { content: 'Counter Name', styles: { halign: 'left' } },
       { content: 'Qty', styles: { halign: 'center' } },
-      { content: 'Rate (Rs.)', styles: { halign: 'right' } },
-      { content: 'Amount (Rs.)', styles: { halign: 'right' } }
+      { content: 'Amount (₹)', styles: { halign: 'right' } }
     ]
   ];
 
   const productRows = [];
 
-  // Check if explicit products array is provided
-  if (Array.isArray(estimateData.products) && estimateData.products.length > 0) {
-    estimateData.products.forEach((prod, idx) => {
-      const qty = parseFloat(prod.quantity || prod.qty || 1) || 1;
-      const rate = parseFloat(prod.rate || prod.price || 0) || 0;
-      const amount = parseFloat(prod.amount) || (qty * rate);
-
-      const particularCell = [
-        prod.name || prod.particular || 'Commercial Kitchen Equipment',
-        prod.size ? `\nSize: ${prod.size}` : '',
-        prod.description ? `\n${prod.description}` : ''
-      ].filter(Boolean).join('');
+  // Build rows dynamically supporting multi-counter items array or single counter
+  if (Array.isArray(estimateData.items) && estimateData.items.length > 0) {
+    estimateData.items.forEach((item, idx) => {
+      const q = parseFloat(item.quantity || item.qty || 1) || 1;
+      const amt = parseFloat(item.amount || item.sellingPrice || item.price || 0) || 0;
+      const name = (item.counterName || item.name || 'Commercial Kitchen Equipment').trim();
 
       productRows.push([
         { content: String(idx + 1), styles: { halign: 'center' } },
-        { content: particularCell },
-        { content: String(qty), styles: { halign: 'center', fontStyle: 'bold' } },
-        { content: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right' } },
-        { content: amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+        { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
+        { content: String(q), styles: { halign: 'center' } },
+        { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
+      ]);
+    });
+  } else if (Array.isArray(estimateData.counters) && estimateData.counters.length > 0) {
+    estimateData.counters.forEach((cnt, idx) => {
+      const q = parseFloat(cnt.quantity || cnt.qty || 1) || 1;
+      const amt = parseFloat(cnt.amount || cnt.sellingPrice || 0) || 0;
+      const name = (cnt.counterName || cnt.name || 'Commercial Kitchen Equipment').trim();
+
+      productRows.push([
+        { content: String(idx + 1), styles: { halign: 'center' } },
+        { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
+        { content: String(q), styles: { halign: 'center' } },
+        { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
       ]);
     });
   } else {
-    // Construct dynamic quotation line items from current estimate
+    // Single counter estimate item
     const mainEquipmentName = estimateData.counterSubtype
       ? `${estimateData.counterType || 'Commercial Kitchen Equipment'} (${estimateData.counterSubtype})`
-      : (estimateData.counterType || estimateData.projectName || 'Commercial Kitchen Equipment');
+      : (estimateData.counterType || 'Commercial Kitchen Equipment');
 
-    const sizeSpec = getEquipmentSizeSpec(estimateData);
+    const counterQty = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
     
-    // Main Counter / Fabricated Equipment Row (Material Cost + Labour Cost)
-    const mainFabCost = calculation.materialCost + calculation.labourCost;
-    const mainQty = 1;
-    const mainRate = mainFabCost;
-    const mainAmount = mainQty * mainRate;
-
-    let particularDesc = mainEquipmentName;
-    if (sizeSpec) {
-      particularDesc += `\n${sizeSpec}`;
-    }
-    if (estimateData.remarks) {
-      particularDesc += `\n${estimateData.remarks}`;
+    // Selling Price calculation
+    let finalSellingAmount = 0;
+    if (estimateData.finalTotal && !isNaN(parseFloat(estimateData.finalTotal))) {
+      finalSellingAmount = parseFloat(estimateData.finalTotal);
+    } else if (estimateData.sellingPrice && !isNaN(parseFloat(estimateData.sellingPrice))) {
+      finalSellingAmount = parseFloat(estimateData.sellingPrice) * counterQty;
+    } else {
+      finalSellingAmount = calculation.sellingPrice * counterQty;
     }
 
     productRows.push([
       { content: '1', styles: { halign: 'center' } },
-      { 
-        content: particularDesc,
-        styles: { fontStyle: 'normal' }
-      },
-      { content: String(mainQty), styles: { halign: 'center', fontStyle: 'bold' } },
-      { content: mainRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right' } },
-      { content: mainAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
-    ]);
-
-    // Additional purchased / compressor accessory items (ONLY items with valid quantity > 0)
-    const validPurchasedRows = [...purchased, ...compressor].filter(p => {
-      if (!p || !p.material) return false;
-      const q = parseFloat(p.quantity);
-      return !isNaN(q) && q > 0;
-    });
-
-    validPurchasedRows.forEach((item, index) => {
-      const pQty = parseFloat(item.quantity) || 1;
-      const pRate = parseFloat(item.price) || 0;
-      const pAmount = pQty * pRate;
-
-      let itemDesc = item.material;
-      if (item.size) {
-        itemDesc += `\nSize / Model: ${item.size}`;
-      }
-
-      productRows.push([
-        { content: String(index + 2), styles: { halign: 'center' } },
-        { content: itemDesc },
-        { content: String(pQty), styles: { halign: 'center', fontStyle: 'bold' } },
-        { content: pRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right' } },
-        { content: pAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
-      ]);
-    });
-  }
-
-  // -------------------------------------------------------------
-  // 4. PRICING SUMMARY ROWS AT BOTTOM OF TABLE
-  // -------------------------------------------------------------
-  // Material Cost Row
-  productRows.push([
-    { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255], borderBottomWidth: 0 } },
-    { content: 'Material Cost', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } },
-    { content: calculation.materialCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } }
-  ]);
-
-  // Purchased & Components Row
-  productRows.push([
-    { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255], borderBottomWidth: 0 } },
-    { content: 'Purchased & Components', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 255, 255] } },
-    { content: calculation.purchasedItemCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 255, 255] } }
-  ]);
-
-  // Labour Cost Row
-  productRows.push([
-    { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255], borderBottomWidth: 0 } },
-    { content: 'Labour Cost', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } },
-    { content: calculation.labourCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } }
-  ]);
-
-  // Discount Row (if discount > 0)
-  if (calculation.discount > 0) {
-    productRows.push([
-      { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255], borderBottomWidth: 0 } },
-      { content: 'Discount', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 255, 255], textColor: [220, 38, 38] } },
-      { content: `- ${calculation.discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 255, 255], textColor: [220, 38, 38] } }
+      { content: mainEquipmentName, styles: { halign: 'left', fontStyle: 'normal' } },
+      { content: String(counterQty), styles: { halign: 'center' } },
+      { content: formatRupee(finalSellingAmount), styles: { halign: 'right', fontStyle: 'bold' } }
     ]);
   }
 
-  // GST Row
+  // Calculate Grand Total Amount across all counters
+  let totalCustomerAmount = 0;
+  if (Array.isArray(estimateData.items) && estimateData.items.length > 0) {
+    totalCustomerAmount = estimateData.items.reduce((sum, it) => sum + (parseFloat(it.amount || it.sellingPrice || 0) || 0), 0);
+  } else if (Array.isArray(estimateData.counters) && estimateData.counters.length > 0) {
+    totalCustomerAmount = estimateData.counters.reduce((sum, it) => sum + (parseFloat(it.amount || it.sellingPrice || 0) || 0), 0);
+  } else if (estimateData.finalTotal && !isNaN(parseFloat(estimateData.finalTotal))) {
+    totalCustomerAmount = parseFloat(estimateData.finalTotal);
+  } else if (estimateData.sellingPrice && !isNaN(parseFloat(estimateData.sellingPrice))) {
+    const q = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
+    totalCustomerAmount = parseFloat(estimateData.sellingPrice) * q;
+  } else {
+    const q = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
+    totalCustomerAmount = calculation.sellingPrice * q;
+  }
+
+  // TOTAL ROW: Right-aligned across first three columns with final amount in Amount column
   productRows.push([
-    { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255], borderBottomWidth: 0 } },
-    { content: `GST (${calculation.gstPercent || 18}%)`, colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } },
-    { content: calculation.gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] } }
+    { 
+      content: 'TOTAL', 
+      colSpan: 3, 
+      styles: { 
+        halign: 'right', 
+        fontStyle: 'bold', 
+        fillColor: [15, 23, 42], // slate-900
+        textColor: [255, 255, 255], 
+        fontSize: 9
+      } 
+    },
+    { 
+      content: formatRupee(totalCustomerAmount), 
+      styles: { 
+        halign: 'right', 
+        fontStyle: 'bold', 
+        fillColor: [15, 23, 42], // slate-900
+        textColor: [255, 255, 255], 
+        fontSize: 9
+      } 
+    }
   ]);
 
-  // GRAND TOTAL Row (Visually highlighted in dark slate)
-  productRows.push([
-    { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
-    { content: 'GRAND TOTAL', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 9.5 } },
-    { content: calculation.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 9.5 } }
-  ]);
-
-  // Render Product Table with jsPDF AutoTable
+  // Render Product Table using jsPDF AutoTable with Exact Dimensions
   autoTable(doc, {
     startY: currentY,
     head: tableHeaders,
     body: productRows,
     theme: 'grid',
+    styles: {
+      font: 'Roboto',
+      fontStyle: 'normal'
+    },
     headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [15, 23, 42],
-      fontSize: 8.5,
+      font: 'Roboto',
       fontStyle: 'bold',
-      cellPadding: 2.8,
-      lineColor: [180, 190, 205],
-      lineWidth: 0.2
+      fillColor: [241, 245, 249], // slate-100
+      textColor: [15, 23, 42], // slate-900
+      fontSize: 8.5,
+      cellPadding: 3,
+      lineColor: [203, 213, 225], // slate-300
+      lineWidth: 0.25
     },
     bodyStyles: {
-      fontSize: 8,
-      textColor: [30, 41, 59],
-      cellPadding: 2.6,
-      lineColor: [203, 213, 225],
+      font: 'Roboto',
+      fontSize: 8.5,
+      textColor: [30, 41, 59], // slate-800
+      cellPadding: 3,
+      lineColor: [226, 232, 240], // slate-200
       lineWidth: 0.2
     },
     columnStyles: {
-      0: { cellWidth: 14, halign: 'center' }, // Sr. No.
-      1: { cellWidth: 96, halign: 'left' },   // Particular
-      2: { cellWidth: 16, halign: 'center' }, // Qty
-      3: { cellWidth: 30, halign: 'right' },  // Rate
-      4: { cellWidth: 30, halign: 'right' }   // Amount
+      0: { cellWidth: 18, halign: 'center' }, // Sr. No. (10.1%)
+      1: { cellWidth: 96, halign: 'left' },   // Counter Name (53.9%)
+      2: { cellWidth: 20, halign: 'center' }, // Qty (11.2%)
+      3: { cellWidth: 44, halign: 'right' }   // Amount (₹) (24.7%)
     },
-    margin: { left: margin, right: margin, bottom: 22 },
-    showHead: 'everyPage',
-    didDrawPage: (data) => {
-      const pageCount = doc.internal.getNumberOfPages();
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(148, 163, 184);
-
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.3);
-      doc.line(margin, pageHeight - 10, margin + contentWidth, pageHeight - 10);
-
-      doc.text('Shree Balaji Enterprises • Commercial Kitchen Equipment Manufacturer', margin, pageHeight - 6);
-      doc.text(`Page ${data.pageNumber} of ${pageCount}`, margin + contentWidth, pageHeight - 6, { align: 'right' });
-    }
+    margin: { left: margin, right: margin, bottom: bottomMargin + 8 },
+    showHead: 'everyPage'
   });
 
   // -------------------------------------------------------------
   // 5. AMOUNT IN WORDS BOX
   // -------------------------------------------------------------
-  let finalY = doc.lastAutoTable.finalY + 4;
+  let afterTableY = doc.lastAutoTable.finalY + 3.5;
 
-  if (finalY + 68 > pageHeight - 18) {
+  // Check if remaining content fits on current page
+  if (afterTableY + 70 > pageHeight - bottomMargin) {
     doc.addPage();
-    finalY = 16;
+    afterTableY = topMargin + 2;
   }
 
-  const wordsText = numberToWords(calculation.grandTotal);
+  const wordsText = numberToWords(totalCustomerAmount);
 
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, finalY, contentWidth, 7, 1, 1, 'F');
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(margin, finalY, contentWidth, 7, 1, 1, 'S');
+  doc.setFillColor(248, 250, 252); // slate-50
+  doc.roundedRect(margin, afterTableY, contentWidth, 8, 1, 1, 'F');
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(0.25);
+  doc.roundedRect(margin, afterTableY, contentWidth, 8, 1, 1, 'S');
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text('Total Amount in Words:', margin + 3, finalY + 4.6);
+  doc.setTextColor(71, 85, 105); // slate-600
+  doc.text('Amount in Words:', margin + 3, afterTableY + 5.2);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setFontSize(7.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(wordsText, margin + 37, finalY + 4.6);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(wordsText, margin + 31, afterTableY + 5.2);
 
-  finalY += 10.5;
+  afterTableY += 12;
 
   // -------------------------------------------------------------
-  // 6. TERMS & CONDITIONS
+  // 6. TERMS & CONDITIONS SECTION
   // -------------------------------------------------------------
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text('TERMS & CONDITIONS', margin, finalY);
-  
+  doc.text('Terms & Conditions', margin, afterTableY);
+
   doc.setDrawColor(15, 23, 42);
   doc.setLineWidth(0.3);
-  doc.line(margin, finalY + 1, margin + 38, finalY + 1);
+  doc.line(margin, afterTableY + 1.2, margin + 35, afterTableY + 1.2);
 
-  finalY += 4.5;
+  afterTableY += 4.8;
 
-  const termsList = Array.isArray(estimateData.terms) && estimateData.terms.length > 0
+  const termsList = (Array.isArray(estimateData.terms) && estimateData.terms.length > 0)
     ? estimateData.terms
     : DEFAULT_TERMS_AND_CONDITIONS;
 
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.setTextColor(51, 65, 85);
 
   termsList.forEach((term, idx) => {
     const label = term.label || `Term ${idx + 1}`;
     const val = term.value || term;
+
+    doc.setFont('Roboto', 'bold');
+    doc.setTextColor(30, 41, 59); // slate-800
+    const prefix = `${idx + 1}. ${label}:`;
+    doc.text(prefix, margin + 1, afterTableY);
+
+    const prefixWidth = doc.getTextWidth(prefix) + 1.5;
     
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${idx + 1}. ${label}:`, margin + 1, finalY);
-    
-    doc.setFont('helvetica', 'normal');
-    const labelWidth = doc.getTextWidth(`${idx + 1}. ${label}:`) + 1.5;
-    const splitVal = doc.splitTextToSize(String(val), contentWidth - labelWidth - 3);
-    doc.text(splitVal, margin + 1 + labelWidth, finalY);
-    
-    finalY += 3.8 * splitVal.length;
+    doc.setFont('Roboto', 'normal');
+    doc.setTextColor(51, 65, 85); // slate-700
+    const splitVal = doc.splitTextToSize(String(val), contentWidth - prefixWidth - 2);
+    doc.text(splitVal, margin + 1 + prefixWidth, afterTableY);
+
+    afterTableY += 3.8 * splitVal.length;
   });
 
-  finalY += 3;
+  afterTableY += 4;
 
   // -------------------------------------------------------------
-  // 7. COMPANY SIGNATURE & ACCEPTANCE FOOTER
+  // 7. SIGNATURE AREA (Two Equal-Width Columns)
   // -------------------------------------------------------------
-  if (finalY + 28 > pageHeight - 15) {
+  if (afterTableY + 28 > pageHeight - bottomMargin) {
     doc.addPage();
-    finalY = 16;
+    afterTableY = topMargin + 4;
   }
 
-  // Left Side: Customer Acceptance Block
-  const sigBoxY = finalY + 2;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text('Customer Acceptance & Confirmation:', margin + 1, sigBoxY);
-  
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.3);
-  doc.line(margin + 1, sigBoxY + 14, margin + 65, sigBoxY + 14);
-  doc.text('Signature & Stamp', margin + 1, sigBoxY + 18);
+  const sigColWidth = 75;
+  const sigY = afterTableY + 2;
 
-  // Right Side: Company Signatory Block
-  const rightFooterX = margin + contentWidth - 65;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  // LEFT COLUMN: Customer Acceptance Block
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text('Customer Acceptance & Confirmation:', margin + 1, sigY);
+
+  // Left Signature Line
+  const leftLineY = sigY + 15;
+  doc.setDrawColor(148, 163, 184); // slate-400
+  doc.setLineWidth(0.3);
+  doc.line(margin + 1, leftLineY, margin + sigColWidth, leftLineY);
+
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(7.5);
   doc.setTextColor(71, 85, 105);
-  doc.text('For', rightFooterX, sigBoxY);
+  doc.text('Signature & Stamp', margin + 1, leftLineY + 4.5);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text('SHREE BALAJI ENTERPRISES', rightFooterX, sigBoxY + 4.5);
-
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.3);
-  doc.line(rightFooterX, sigBoxY + 14, margin + contentWidth, sigBoxY + 14);
-
-  doc.setFont('helvetica', 'bold');
+  // RIGHT COLUMN: Company Signatory Block
+  const rightColX = margin + contentWidth - sigColWidth;
+  
+  doc.setFont('Roboto', 'bold');
   doc.setFontSize(7.5);
-  doc.setTextColor(51, 65, 85);
-  doc.text('Authorized Signatory', rightFooterX, sigBoxY + 18);
+  doc.setTextColor(71, 85, 105);
+  doc.text('For', rightColX, sigY);
 
-  doc.text(`Office: ${COMPANY_DETAILS.office || '+91 9604597979'} | Phone: +91 9604386808`, rightFooterX, sigBoxY + 22);
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text('SHREE BALAJI ENTERPRISES', rightColX, sigY + 4.5);
+
+  // Right Signature Line (Exact Same Horizontal Level as Left Line)
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.3);
+  doc.line(rightColX, leftLineY, margin + contentWidth, leftLineY);
+
+  doc.setFont('Roboto', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text('Authorized Signatory', rightColX, leftLineY + 4.5);
+
+  doc.setFont('Roboto', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Contact: +91 9011127134 / +91 9604386808', rightColX, leftLineY + 8.5);
 
   // -------------------------------------------------------------
-  // 8. OUTPUT / DOWNLOAD / PRINT
+  // 8. RUNNING PAGE FOOTER ACROSS ALL PAGES
   // -------------------------------------------------------------
-  const fileName = getQuotationFileName(estimateData.customerName || estimateData.clientName, estNumber);
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    doc.setPage(pageNum);
+    
+    // Top border of footer
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.3);
+    doc.line(margin, pageHeight - 10, margin + contentWidth, pageHeight - 10);
+
+    // Footer Text
+    doc.setFont('Roboto', 'normal');
+    doc.setFontSize(7.2);
+    doc.setTextColor(148, 163, 184); // slate-400
+
+    doc.text('Shree Balaji Enterprises • Commercial Kitchen Equipment Manufacturer', margin, pageHeight - 6);
+    doc.text(`Page ${pageNum} of ${totalPages}`, margin + contentWidth, pageHeight - 6, { align: 'right' });
+  }
+
+  // -------------------------------------------------------------
+  // 9. OUTPUT / DOWNLOAD / PRINT
+  // -------------------------------------------------------------
+  const fileName = getQuotationFileName(
+    estimateData.customerName || estimateData.clientName || estimateData.projectName, 
+    estNumber
+  );
 
   if (shouldPrint) {
     doc.autoPrint();
-    const blobUrl = doc.output('bloburl');
-    window.open(blobUrl, '_blank');
-  } else {
+    if (typeof window !== 'undefined') {
+      const blobUrl = doc.output('bloburl');
+      window.open(blobUrl, '_blank');
+    }
+  } else if (typeof window !== 'undefined') {
     doc.save(fileName);
   }
 

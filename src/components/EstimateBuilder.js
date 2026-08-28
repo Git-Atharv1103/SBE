@@ -10,6 +10,7 @@ import {
   CheckCircle,
   X,
   RotateCcw,
+  RefreshCw,
   ArrowRight,
   ArrowLeft,
   Package,
@@ -17,19 +18,22 @@ import {
   Wrench,
   Scale,
   PlusCircle,
-  Cpu,
-  Ruler,
   FileText,
-  Bug
+  Percent,
+  IndianRupee,
+  ChevronRight,
+  Copy
 } from 'lucide-react';
 import {
   COUNTER_TYPES,
   COUNTER_TYPES_CONFIG,
+  COUNTER_CONFIG,
   SHEET_GRADES,
   STAINLESS_STEEL_GRADES,
   STANDARD_GAUGES,
   STANDARD_GAUGE_WEIGHTS,
-  FRIDGE_GAUGES,
+  PIPE_GAUGE_OPTIONS,
+  PIPE_SIZE_OPTIONS,
   PIPE_MASTER,
   ANGLE_MASTER,
   ANGLE_GAUGE_OPTIONS,
@@ -42,8 +46,14 @@ import {
   getFallbackCounterTemplate
 } from '@/lib/constants';
 import {
-  calculateRowWeight,
+  calculateSheetWeight,
+  calculatePipeWeight,
   calculateAngleWeight,
+  calculateRowWeight,
+  calculateSheetTotalWeight,
+  calculatePipeTotalWeight,
+  calculateAngleTotalWeight,
+  calculateGrandTotalWeight,
   calculateEstimate,
   calculatePurchasedItemPrice,
   formatCurrency,
@@ -51,11 +61,16 @@ import {
   formatPurchasedPrice
 } from '@/lib/calculations';
 import { generateQuotationPDF } from '@/lib/pdfGenerator';
-import Counter3DPreview from '@/components/3d/Counter3DPreview';
 
 export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
+  // 4-Step Commercial Fabrication Wizard
+  // Step 1: Client & Counter Selection
+  // Step 2: Material Specifications
+  // Step 3: Weight Summary & Labour Cost
+  // Step 4: Selling Price, GST, Discount & Final Estimate
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isRefreshingRates, setIsRefreshingRates] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
   // Master Materials & Counter Types from API
@@ -70,25 +85,37 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     phone: '',
     email: '',
     address: '',
-    counterType: '',
+    counterType: 'Working Table',
     counterSubtype: '',
+    counterQuantity: '1',
     estimateNumber: 'EST 01',
     date: new Date().toISOString().split('T')[0]
   });
+  const [phoneTouched, setPhoneTouched] = useState(false);
 
-  // Form State - Step 2: Material Specifications (Sheet, Pipe, Angle, Purchased, Compressor)
+  // Phone Validation: mandatory, exactly 10 digits, numbers only
+  const isPhoneValid = useMemo(() => {
+    return /^\d{10}$/.test((clientData.phone || '').trim());
+  }, [clientData.phone]);
+
+  // Form State - Step 2: Material Specifications
   const [sheets, setSheets] = useState([]);
   const [pipes, setPipes] = useState([]);
   const [angles, setAngles] = useState([]);
   const [purchased, setPurchased] = useState([]);
   const [compressor, setCompressor] = useState([]);
 
-  // Form State - Step 3: Cost Summary Inputs
+  // Form State - Pricing & Financial Inputs
   const [pricingInputs, setPricingInputs] = useState({
-    materialRate: '',
-    labourCost: '',
-    gst: String(DEFAULT_GST_PERCENT),
-    discount: ''
+    sheetRate: '',
+    pipeRate: '',
+    angleRate: '',
+    materialRate: '',      // Initially completely empty per user requirement
+    labourRate: '',        // Initially completely empty per user requirement
+    labourCost: '',        // Auto-calculated = Material Weight * labourRate
+    sellingPercentage: '', // initially empty
+    gst: '',               // initially empty
+    discount: ''           // initially empty
   });
 
   // Modal State for adding custom or catalog material row
@@ -145,22 +172,81 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     }
   };
 
-  // Derive active counter type configuration (check if it has subtypes)
+  // Fast Rate Refresh Handler (Requirement 17)
+  const handleRefreshRates = async () => {
+    try {
+      setIsRefreshingRates(true);
+      const [mRes, ctRes] = await Promise.all([
+        fetch('/api/materials'),
+        fetch('/api/counter-types')
+      ]);
+      if (mRes.ok) {
+        const mData = await mRes.json();
+        setMasterMaterials(mData);
+      }
+      if (ctRes.ok) {
+        const ctData = await ctRes.json();
+        setMasterCounterTypes(ctData);
+      }
+      showStatus('success', 'Rates and master catalog refreshed successfully!');
+    } catch (err) {
+      console.error('Failed to refresh rates:', err);
+      showStatus('error', 'Failed to refresh rates. Please check network connection.');
+    } finally {
+      setIsRefreshingRates(false);
+    }
+  };
+
+  // Derive active counter type configuration
   const currentCounterConfig = useMemo(() => {
-    if (!clientData.counterType) return { hasSubtypes: false, subtypes: [] };
-    return COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [] };
+    if (!clientData.counterType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
+    return COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
   }, [clientData.counterType]);
 
-  // Dynamically derive all available main counter types from Master + constants
+  // Helper to check if a counter name is a Gas Range subtype
+  const isGasRangeSubtype = (name) => {
+    const n = (name || '').toLowerCase().trim();
+    return n === 'single gas range' ||
+      n === 'double gas range' ||
+      n === 'triple gas range' ||
+      n === 'four gas range' ||
+      n === 'chinese gas range' ||
+      n === '2x gas range' ||
+      (n.startsWith('gas range ') && n !== 'gas range');
+  };
+
+  // Dynamically derive all available main counter types (Deduplicated strictly)
   const availableCounterTypes = useMemo(() => {
-    const set = new Set();
-    COUNTER_TYPES.forEach(ct => set.add(ct));
-    masterCounterTypes.forEach(ct => { if (ct.name && ct.status !== 'Inactive') set.add(ct.name.trim()); });
-    return Array.from(set);
+    const seen = new Set();
+    const result = [];
+
+    // First, standard counter types from constants
+    COUNTER_TYPES.forEach(ct => {
+      const clean = ct.trim();
+      const lower = clean.toLowerCase();
+      if (!isGasRangeSubtype(clean) && !seen.has(lower)) {
+        seen.add(lower);
+        result.push(clean);
+      }
+    });
+
+    // Then master counter types from DB
+    masterCounterTypes.forEach(ct => {
+      if (ct.name && ct.status !== 'Inactive') {
+        const cleanName = ct.name.trim() === 'Table' ? 'Working Table' : ct.name.trim();
+        const lower = cleanName.toLowerCase();
+        if (!isGasRangeSubtype(cleanName) && !seen.has(lower)) {
+          seen.add(lower);
+          result.push(cleanName);
+        }
+      }
+    });
+
+    return result;
   }, [masterCounterTypes]);
 
-  // Load Material Component Structure for Selected Counter Type and Subtype from Material Master
-  const loadMaterialsForCounterType = useCallback((counterType, counterSubtype, allMaterials = masterMaterials) => {
+  // Load Material Component Structure for Selected Counter Type from Central Configuration
+  const loadMaterialsForCounterType = useCallback((counterType, counterSubtype) => {
     if (!counterType) {
       setSheets([]);
       setPipes([]);
@@ -180,134 +266,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       return;
     }
 
-    const targetKey = (config.hasSubtypes && counterSubtype) ? counterSubtype : counterType;
-
-    // Filter active products configured for this Counter Type / Subtype in Material Master
-    const configuredMaterials = (allMaterials || []).filter(m =>
-      m.status !== 'Inactive' &&
-      Array.isArray(m.counterTypes) &&
-      (m.counterTypes.includes(targetKey) || m.counterTypes.includes(counterType))
-    );
-
-    if (configuredMaterials.length > 0) {
-      // 1. Sheets
-      const sheetRows = configuredMaterials
-        .filter(m => (m.category || '').toLowerCase() === 'sheet' || (m.calculationType || '').toLowerCase() === 'sheet')
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map((m, idx) => {
-          let gaugeOpts = Array.isArray(m.gaugeOptions) && m.gaugeOptions.length > 0 ? m.gaugeOptions : null;
-          let initialGauge = m.gauge !== undefined && m.gauge !== null && m.gauge !== ''
-            ? parseFloat(m.gauge)
-            : (gaugeOpts ? gaugeOpts[0] : '');
-
-          return {
-            id: `sheet-${m._id || idx}-${Date.now()}-${idx}`,
-            materialId: m._id,
-            material: m.materialName,
-            calculationType: 'sheet',
-            grade: m.grade ? String(m.grade).replace(/^SS/i, '') : '304',
-            length: '',
-            width: '',
-            gauge: initialGauge,
-            gaugeOptions: gaugeOpts,
-            quantity: '',
-            unit: 'inch'
-          };
-        });
-
-      // 2. Pipes
-      const pipeRows = configuredMaterials
-        .filter(m => (m.category || '').toLowerCase() === 'pipe' || (m.calculationType || '').toLowerCase() === 'pipe')
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map((m, idx) => ({
-          id: `pipe-${m._id || idx}-${Date.now()}-${idx}`,
-          materialId: m._id,
-          material: m.materialName,
-          calculationType: 'pipe',
-          grade: m.grade ? String(m.grade).replace(/^SS/i, '') : '304',
-          pipeSize: m.pipeSize || '',
-          length: '',
-          quantity: ''
-        }));
-
-      // 3. Angles (Only if configured)
-      const angleRows = configuredMaterials
-        .filter(m => (m.category || '').toLowerCase() === 'angle' || (m.calculationType || '').toLowerCase() === 'angle')
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map((m, idx) => ({
-          id: `angle-${m._id || idx}-${Date.now()}-${idx}`,
-          materialId: m._id,
-          material: m.materialName,
-          calculationType: 'angle',
-          grade: m.grade ? String(m.grade).replace(/^SS/i, '') : '304',
-          gauge: m.gauge || '25 × 3 mm',
-          length: '',
-          quantity: ''
-        }));
-
-      // 4. Purchased Items (Auto-fetched from Material Master for this Counter Type)
-      const purchasedRows = configuredMaterials
-        .filter(m => (m.category || '').toLowerCase() === 'purchased' || (m.calculationType || '').toLowerCase() === 'purchased')
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map((m, idx) => {
-          const dropdownOpts = Array.isArray(m.dropdownOptions) && m.dropdownOptions.length > 0
-            ? m.dropdownOptions
-            : (Array.isArray(m.options) && m.options.length > 0 ? m.options : getItemSizeOptions(m.materialName));
-          return {
-            id: `purchased-${m._id || idx}-${Date.now()}-${idx}`,
-            materialId: m._id,
-            material: m.materialName,
-            calculationType: 'purchased',
-            dropdownOptions: dropdownOpts,
-            allowMultiple: Boolean(m.allowMultiple) || (dropdownOpts && dropdownOpts.length > 0),
-            size: dropdownOpts && dropdownOpts.length > 0 ? dropdownOpts[0] : '',
-            quantity: '',
-            price: m.price !== null && m.price !== undefined ? String(m.price) : ''
-          };
-        });
-
-      // 5. Compressor Items (Auto-fetched from Material Master for this Counter Type)
-      const compressorRows = configuredMaterials
-        .filter(m => (m.category || '').toLowerCase() === 'compressor' || (m.calculationType || '').toLowerCase() === 'compressor' || (m.category || '').toLowerCase() === 'special')
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map((m, idx) => {
-          const dropdownOpts = Array.isArray(m.dropdownOptions) && m.dropdownOptions.length > 0 ? m.dropdownOptions : null;
-          return {
-            id: `comp-${m._id || idx}-${Date.now()}-${idx}`,
-            materialId: m._id,
-            material: m.materialName,
-            calculationType: 'compressor',
-            category: 'Compressor',
-            dropdownOptions: dropdownOpts,
-            allowMultiple: Boolean(m.allowMultiple),
-            size: dropdownOpts && dropdownOpts.length > 0 ? dropdownOpts[0] : '',
-            quantity: '',
-            price: m.price !== null && m.price !== undefined ? String(m.price) : ''
-          };
-        });
-
-      // Set sheets, pipes, angles, purchased, and compressor from template
-      setSheets(sheetRows);
-      setPipes(pipeRows);
-      setAngles(angleRows);
-      setPurchased(purchasedRows);
-      setCompressor(compressorRows);
-    } else {
-      // Fallback from central templates
-      const fallback = getFallbackCounterTemplate(targetKey);
-      setSheets(JSON.parse(JSON.stringify(fallback.sheets || [])));
-      setPipes(JSON.parse(JSON.stringify(fallback.pipes || [])));
-      setAngles(JSON.parse(JSON.stringify(fallback.angles || [])));
-      setPurchased(JSON.parse(JSON.stringify(fallback.purchased || [])));
-      setCompressor(JSON.parse(JSON.stringify(fallback.compressor || [])));
-    }
-  }, [masterMaterials]);
+    // Load from central fallback template (single source of truth)
+    const template = getFallbackCounterTemplate(counterType, counterSubtype);
+    setSheets(JSON.parse(JSON.stringify(template.sheets || [])));
+    setPipes(JSON.parse(JSON.stringify(template.pipes || [])));
+    setAngles(JSON.parse(JSON.stringify(template.angles || [])));
+    setPurchased(JSON.parse(JSON.stringify(template.purchased || [])));
+    setCompressor(JSON.parse(JSON.stringify(template.compressor || [])));
+  }, []);
 
   // Handle Counter Type Selection Change in Step 1
   const handleCounterTypeChange = (newType) => {
     const config = COUNTER_TYPES_CONFIG[newType] || { hasSubtypes: false, subtypes: [] };
-    const defaultSubtype = config.hasSubtypes ? '' : '';
-    setClientData(prev => ({ ...prev, counterType: newType, counterSubtype: defaultSubtype }));
+    setClientData(prev => ({ ...prev, counterType: newType, counterSubtype: '' }));
     if (!config.hasSubtypes) {
       loadMaterialsForCounterType(newType, '');
     } else {
@@ -333,20 +304,30 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     }
   };
 
+  // Set default counter on initial mount if empty
+  useEffect(() => {
+    if (!projectToEdit && sheets.length === 0 && clientData.counterType) {
+      loadMaterialsForCounterType(clientData.counterType, clientData.counterSubtype);
+    }
+  }, [projectToEdit, loadMaterialsForCounterType, clientData.counterType, clientData.counterSubtype, sheets.length]);
+
   // Initialize or Reopen Project
   useEffect(() => {
     if (projectToEdit) {
+      const cType = projectToEdit.counterType === 'Table' ? 'Working Table' : (projectToEdit.counterType || 'Working Table');
       setClientData({
         customerName: projectToEdit.customerName || '',
         companyName: projectToEdit.companyName || '',
         phone: projectToEdit.phone || '',
         email: projectToEdit.email || '',
         address: projectToEdit.address || '',
-        counterType: projectToEdit.counterType || '',
+        counterType: cType,
         counterSubtype: projectToEdit.counterSubtype || '',
+        counterQuantity: projectToEdit.counterQuantity ? String(projectToEdit.counterQuantity) : '1',
         estimateNumber: projectToEdit.estimateNumber || 'EST 01',
         date: projectToEdit.date ? new Date(projectToEdit.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       });
+      setPhoneTouched(true);
 
       setSheets(projectToEdit.sheets || []);
       setPipes(projectToEdit.pipes || []);
@@ -355,10 +336,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       setCompressor(projectToEdit.compressor || []);
 
       setPricingInputs({
-        materialRate: projectToEdit.materialRate ? String(projectToEdit.materialRate) : '',
+        sheetRate: projectToEdit.sheetRate !== undefined && projectToEdit.sheetRate !== null && projectToEdit.sheetRate !== '' ? String(projectToEdit.sheetRate) : (projectToEdit.materialRate ? String(projectToEdit.materialRate) : ''),
+        pipeRate: projectToEdit.pipeRate !== undefined && projectToEdit.pipeRate !== null && projectToEdit.pipeRate !== '' ? String(projectToEdit.pipeRate) : '',
+        angleRate: projectToEdit.angleRate !== undefined && projectToEdit.angleRate !== null && projectToEdit.angleRate !== '' ? String(projectToEdit.angleRate) : '',
+        materialRate: projectToEdit.materialRate !== undefined && projectToEdit.materialRate !== null && projectToEdit.materialRate !== '' ? String(projectToEdit.materialRate) : '',
+        labourRate: projectToEdit.labourRate !== undefined && projectToEdit.labourRate !== null && projectToEdit.labourRate !== '' ? String(projectToEdit.labourRate) : '',
         labourCost: projectToEdit.labourCost ? String(projectToEdit.labourCost) : '',
-        gst: projectToEdit.gst !== undefined ? String(projectToEdit.gst) : String(DEFAULT_GST_PERCENT),
-        discount: projectToEdit.discount ? String(projectToEdit.discount) : ''
+        sellingPercentage: projectToEdit.sellingPercentage !== undefined && projectToEdit.sellingPercentage !== null && projectToEdit.sellingPercentage !== '' ? String(projectToEdit.sellingPercentage) : '',
+        gst: projectToEdit.gst !== undefined && projectToEdit.gst !== null && projectToEdit.gst !== '' ? String(projectToEdit.gst) : '',
+        discount: projectToEdit.discount !== undefined && projectToEdit.discount !== null && projectToEdit.discount !== '' ? String(projectToEdit.discount) : ''
       });
     }
   }, [projectToEdit]);
@@ -371,80 +357,56 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     return String(val).replace(/^0+(?=\d)/, '');
   };
 
-  // Master Reactive Calculation
+  // Master Reactive Calculation Engine
   const calculation = useMemo(() => {
-    const rate = parseFloat(pricingInputs.materialRate) || 0;
-    const labour = parseFloat(pricingInputs.labourCost) || 0;
-    const disc = parseFloat(pricingInputs.discount) || 0;
-    const gstVal = pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : DEFAULT_GST_PERCENT;
+    const matRate = (pricingInputs.materialRate !== '' && !isNaN(parseFloat(pricingInputs.materialRate)))
+      ? parseFloat(pricingInputs.materialRate)
+      : ((pricingInputs.sheetRate !== '' && !isNaN(parseFloat(pricingInputs.sheetRate))) ? parseFloat(pricingInputs.sheetRate) : 0);
+    const lRate = (pricingInputs.labourRate !== '' && !isNaN(parseFloat(pricingInputs.labourRate))) ? parseFloat(pricingInputs.labourRate) : 0;
+    const sPct = pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0;
+    const cQty = Math.max(1, parseInt(clientData.counterQuantity, 10) || 1);
+    const disc = pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0;
+    const gstVal = pricingInputs.gst !== '' ? pricingInputs.gst : '';
 
     return calculateEstimate({
-      materials: { sheets, pipes, angles, purchased, compressor },
-      materialRate: rate,
-      labourCost: labour,
+      sheets,
+      pipes,
+      angles,
+      purchased,
+      compressor,
+      materialRate: matRate,
+      labourRate: lRate,
+      sellingPercentage: sPct,
+      counterQuantity: cQty,
       discount: disc,
       gst: gstVal
     });
-  }, [sheets, pipes, angles, purchased, compressor, pricingInputs]);
+  }, [sheets, pipes, angles, purchased, compressor, pricingInputs, clientData.counterQuantity]);
 
-  // Dynamic Quotation / Bill Line Items (Fabricated Equipment + ONLY user-entered Purchase & Compressor Items)
+  // Customer-Facing Quotation / Bill Line Items (Clean format per Requirement 13, 14, 31)
   const quotationBillItems = useMemo(() => {
-    const items = [];
-
-    // 1. Fabricated Equipment Item (Material Cost + Labour Cost)
     const mainEquipmentName = clientData.counterSubtype
       ? `${clientData.counterType || 'Commercial Kitchen Equipment'} (${clientData.counterSubtype})`
       : (clientData.counterType || 'Commercial Kitchen Equipment');
 
-    let dimText = '';
-    const topSheet = (sheets || []).find(s => {
-      const n = (s.material || '').toLowerCase();
-      return n.includes('top') || n === 'sheet' || (s.length && s.width);
-    });
-    if (topSheet && topSheet.length && topSheet.width) {
-      dimText = `${topSheet.length}" × ${topSheet.width}"`;
-    }
+    const counterQty = Math.max(1, parseInt(clientData.counterQuantity, 10) || 1);
+    // Amount in bill row is Selling Price per Unit × Quantity
+    const rowAmount = calculation.totalSellingPrice;
 
-    const mainRate = calculation.materialCost + calculation.labourCost;
-    items.push({
+    return [{
       srNo: 1,
-      particulars: mainEquipmentName,
-      spec: dimText ? `Fabricated SS Equipment • Size: ${dimText}` : 'Fabricated Stainless Steel Equipment',
-      quantity: 1,
-      rate: mainRate,
-      amount: mainRate,
-      type: 'fabricated'
-    });
+      counterName: mainEquipmentName,
+      quantity: counterQty,
+      rate: calculation.unitSellingPrice,
+      amount: rowAmount
+    }];
+  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation.unitSellingPrice, calculation.totalSellingPrice]);
 
-    // 2. Purchased & Compressor Items (ONLY rows with valid material and quantity > 0 entered by the user)
-    const validPurchased = [...(purchased || []), ...(compressor || [])].filter(p => {
-      if (!p || !p.material || !String(p.material).trim()) return false;
-      const q = parseFloat(p.quantity);
-      return !isNaN(q) && q > 0;
-    });
+  // =========================================================================
+  // ROW CRUD & UNIVERSAL "+ ADD MORE" INSERTION DIRECTLY BELOW SOURCE ROW
+  // =========================================================================
 
-    validPurchased.forEach((p, idx) => {
-      const q = parseFloat(p.quantity) || 1;
-      const rate = parseFloat(p.price) || 0;
-      const amount = calculatePurchasedItemPrice(q, rate) !== null ? calculatePurchasedItemPrice(q, rate) : (q * rate);
-      const spec = p.size ? `Size / Model: ${p.size}` : '';
-
-      items.push({
-        srNo: idx + 2,
-        particulars: p.material,
-        spec,
-        quantity: q,
-        rate,
-        amount,
-        type: p.calculationType || 'purchased',
-        id: p.id
-      });
-    });
-
-    return items;
-  }, [clientData.counterType, clientData.counterSubtype, sheets, purchased, compressor, calculation.materialCost, calculation.labourCost]);
-
-  // Sheet Row Handlers
+  // 1. Sheet Rows
   const updateSheetRow = (index, field, value) => {
     setSheets(prev => {
       const copy = [...prev];
@@ -457,7 +419,26 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setSheets(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Pipe Row Handlers
+  // Dynamic clone/insert directly below the clicked row
+  const handleAddMoreSheetRow = (index) => {
+    setSheets(prev => {
+      const source = prev[index];
+      const newRow = {
+        ...source,
+        id: `sheet-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        length: '',
+        width: source?.width !== undefined ? '' : undefined,
+        height: source?.height !== undefined ? '' : undefined,
+        quantity: '',
+        isRepeatable: true
+      };
+      const copy = [...prev];
+      copy.splice(index + 1, 0, newRow);
+      return copy;
+    });
+  };
+
+  // 2. Pipe Rows
   const updatePipeRow = (index, field, value) => {
     setPipes(prev => {
       const copy = [...prev];
@@ -470,7 +451,24 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setPipes(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Angle Row Handlers
+  const handleAddMorePipeRow = (index) => {
+    setPipes(prev => {
+      const source = prev[index];
+      const newRow = {
+        ...source,
+        id: `pipe-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        length: '',
+        unit: source?.unit || 'ft',
+        quantity: '',
+        isRepeatable: true
+      };
+      const copy = [...prev];
+      copy.splice(index + 1, 0, newRow);
+      return copy;
+    });
+  };
+
+  // 3. Angle Rows
   const updateAngleRow = (index, field, value) => {
     setAngles(prev => {
       const copy = [...prev];
@@ -483,7 +481,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setAngles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Purchased Row Handlers
+  const handleAddMoreAngleRow = (index) => {
+    setAngles(prev => {
+      const source = prev[index];
+      const newRow = {
+        ...source,
+        id: `angle-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        length: '',
+        quantity: '',
+        isRepeatable: true
+      };
+      const copy = [...prev];
+      copy.splice(index + 1, 0, newRow);
+      return copy;
+    });
+  };
+
+  // 4. Purchased Rows
   const updatePurchasedRow = (index, field, value) => {
     setPurchased(prev => {
       const copy = [...prev];
@@ -496,7 +510,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setPurchased(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Compressor Row Handlers
+  const handleAddMorePurchasedRow = (index) => {
+    setPurchased(prev => {
+      const source = prev[index];
+      const newRow = {
+        ...source,
+        id: `pur-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        quantity: '',
+        price: '', // Intentionally empty per Requirement 8
+        isRepeatable: true
+      };
+      const copy = [...prev];
+      copy.splice(index + 1, 0, newRow);
+      return copy;
+    });
+  };
+
+  // 5. Compressor Rows
   const updateCompressorRow = (index, field, value) => {
     setCompressor(prev => {
       const copy = [...prev];
@@ -509,80 +539,61 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     setCompressor(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Duplicate / Add another instance of a repeatable purchased item (e.g. Burner, Copper Pipe, Mixing Tube, Patti, Bar, GN Pan, Round Vessel)
-  const handleAddRepeatablePurchasedItem = (baseItem) => {
-    const dropdownOpts = baseItem.dropdownOptions || getItemSizeOptions(baseItem.material);
-    const newRow = {
-      id: `pur-repeat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      materialId: baseItem.materialId || '',
-      material: baseItem.material,
-      calculationType: 'purchased',
-      dropdownOptions: dropdownOpts,
-      allowMultiple: true,
-      size: dropdownOpts ? dropdownOpts[0] : (baseItem.size || ''),
-      quantity: '',
-      price: baseItem.price || ''
-    };
-    setPurchased(prev => [...prev, newRow]);
+  const handleAddMoreCompressorRow = (index) => {
+    setCompressor(prev => {
+      const source = prev[index];
+      const newRow = {
+        ...source,
+        id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        quantity: '',
+        price: '',
+        isRepeatable: true
+      };
+      const copy = [...prev];
+      copy.splice(index + 1, 0, newRow);
+      return copy;
+    });
   };
 
-  // Duplicate / Add another instance of a compressor item
-  const handleAddRepeatableCompressorItem = (baseItem) => {
-    const newRow = {
-      id: `comp-repeat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      materialId: baseItem.materialId || '',
-      material: baseItem.material,
-      calculationType: 'compressor',
-      category: 'Compressor',
-      dropdownOptions: baseItem.dropdownOptions || null,
-      allowMultiple: true,
-      size: (baseItem.dropdownOptions && baseItem.dropdownOptions.length > 0) ? baseItem.dropdownOptions[0] : (baseItem.size || ''),
-      quantity: '',
-      price: baseItem.price || ''
-    };
-    setCompressor(prev => [...prev, newRow]);
-  };
-
-  // Add custom or catalog material row
+  // Add custom blank material row
   const handleAddNewMaterial = (type) => {
     setIsAddMaterialModalOpen(false);
     const newId = `custom-${Date.now()}`;
     if (type === 'SHEET') {
       setSheets(prev => [
         ...prev,
-        { id: newId, material: '', calculationType: 'sheet', grade: '304', length: '', width: '', gauge: '', quantity: '', unit: 'inch' }
+        { id: newId, material: '', calculationType: 'sheet', grade: '304', length: '', width: '', depth: currentCounterConfig.hasDepth ? '' : undefined, gauge: 1.2, quantity: '', unit: 'inch', isRepeatable: true }
       ]);
     } else if (type === 'PIPE') {
       setPipes(prev => [
         ...prev,
-        { id: newId, material: '', calculationType: 'pipe', grade: '304', pipeSize: '', length: '', quantity: '' }
+        { id: newId, material: '', calculationType: 'pipe', grade: '304', pipeSize: '1.5" (38 × 38 mm)', pipeGauge: '1.2 mm', length: '', unit: 'ft', quantity: '', isRepeatable: true }
       ]);
     } else if (type === 'ANGLE') {
       setAngles(prev => [
         ...prev,
-        { id: newId, material: 'Angle', calculationType: 'angle', grade: '304', gauge: '25 × 3 mm', length: '', quantity: '' }
+        { id: newId, material: 'Angle', calculationType: 'angle', grade: '304', gauge: '25 × 3 mm', length: '', quantity: '', isRepeatable: true }
       ]);
     } else if (type === 'PURCHASED') {
       setPurchased(prev => [
         ...prev,
-        { id: newId, material: '', calculationType: 'purchased', size: '', quantity: '', price: '' }
+        { id: newId, material: '', calculationType: 'purchased', size: '', quantity: '', price: '', isRepeatable: true }
       ]);
     } else if (type === 'COMPRESSOR') {
       setCompressor(prev => [
         ...prev,
-        { id: newId, material: '', calculationType: 'compressor', category: 'Compressor', size: '', quantity: '', price: '' }
+        { id: newId, material: '', calculationType: 'compressor', category: 'Compressor', size: '', quantity: '', price: '', isRepeatable: true }
       ]);
     }
   };
 
-  // Add selected item from Material Master catalog
+  // Add item from master catalog
   const handleAddFromCatalog = (mat) => {
     setIsAddMaterialModalOpen(false);
     const newId = `master-${mat._id || Date.now()}-${Date.now()}`;
     const cat = (mat.category || '').toLowerCase();
 
     if (cat === 'sheet') {
-      const gaugeOpts = Array.isArray(mat.gaugeOptions) && mat.gaugeOptions.length > 0 ? mat.gaugeOptions : null;
       setSheets(prev => [
         ...prev,
         {
@@ -593,10 +604,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           grade: mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304',
           length: '',
           width: '',
-          gauge: mat.gauge || (gaugeOpts ? gaugeOpts[0] : ''),
-          gaugeOptions: gaugeOpts,
+          depth: currentCounterConfig.hasDepth ? '' : undefined,
+          gauge: mat.gauge || 1.2,
           quantity: '',
-          unit: 'inch'
+          unit: 'inch',
+          isRepeatable: true
         }
       ]);
     } else if (cat === 'pipe') {
@@ -608,9 +620,12 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           material: mat.materialName,
           calculationType: 'pipe',
           grade: mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304',
-          pipeSize: mat.pipeSize || '',
+          pipeSize: mat.pipeSize || '1.5" (38 × 38 mm)',
+          pipeGauge: mat.gauge || '1.2 mm',
           length: '',
-          quantity: ''
+          unit: 'ft',
+          quantity: '',
+          isRepeatable: true
         }
       ]);
     } else if (cat === 'angle') {
@@ -624,11 +639,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           grade: mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304',
           gauge: mat.gauge || '25 × 3 mm',
           length: '',
-          quantity: ''
+          quantity: '',
+          isRepeatable: true
         }
       ]);
     } else if (cat === 'compressor' || cat === 'special') {
-      const dropdownOpts = Array.isArray(mat.dropdownOptions) && mat.dropdownOptions.length > 0 ? mat.dropdownOptions : null;
       setCompressor(prev => [
         ...prev,
         {
@@ -637,17 +652,16 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           material: mat.materialName,
           calculationType: 'compressor',
           category: 'Compressor',
-          dropdownOptions: dropdownOpts,
-          allowMultiple: Boolean(mat.allowMultiple),
-          size: dropdownOpts ? dropdownOpts[0] : '',
-          quantity: '1',
-          price: mat.price !== null && mat.price !== undefined ? String(mat.price) : ''
+          size: '',
+          quantity: '',
+          price: mat.price !== null && mat.price !== undefined ? String(mat.price) : '',
+          isRepeatable: true
         }
       ]);
     } else {
       const dropdownOpts = Array.isArray(mat.dropdownOptions) && mat.dropdownOptions.length > 0
         ? mat.dropdownOptions
-        : (Array.isArray(mat.options) && mat.options.length > 0 ? mat.options : getItemSizeOptions(mat.materialName));
+        : getItemSizeOptions(mat.materialName);
       setPurchased(prev => [
         ...prev,
         {
@@ -656,10 +670,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           material: mat.materialName,
           calculationType: 'purchased',
           dropdownOptions: dropdownOpts,
-          allowMultiple: Boolean(mat.allowMultiple) || (dropdownOpts && dropdownOpts.length > 0),
           size: dropdownOpts ? dropdownOpts[0] : '',
-          quantity: '1',
-          price: mat.price !== null && mat.price !== undefined ? String(mat.price) : ''
+          quantity: '',
+          price: mat.price !== null && mat.price !== undefined ? String(mat.price) : '',
+          isRepeatable: true
         }
       ]);
     }
@@ -684,27 +698,29 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       phone: '',
       email: '',
       address: '',
-      counterType: '',
+      counterType: 'Working Table',
       counterSubtype: '',
+      counterQuantity: '1',
       estimateNumber: nextNum,
       date: new Date().toISOString().split('T')[0]
     });
-    setSheets([]);
-    setPipes([]);
-    setAngles([]);
-    setPurchased([]);
-    setCompressor([]);
     setPricingInputs({
-      materialRate: '',
+      sheetRate: '250',
+      pipeRate: '270',
+      angleRate: '220',
+      materialRate: '250',
+      labourRate: '100',
       labourCost: '',
-      gst: String(DEFAULT_GST_PERCENT),
+      sellingPercentage: '',
+      gst: '',
       discount: ''
     });
+    loadMaterialsForCounterType('Working Table', '');
     setCurrentStep(1);
     showStatus('success', `Reset workspace for New Counter Estimate (${nextNum}).`);
   };
 
-  // Action: Save Project
+  // Action: Save Project / Save Estimate (Section 35)
   const handleSaveProject = async () => {
     if (!clientData.customerName.trim()) {
       showStatus('warning', 'Please provide a Customer Name in Step 1.');
@@ -739,24 +755,38 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           address: clientData.address,
           counterType: clientData.counterType,
           counterSubtype: clientData.counterSubtype,
+          counterQuantity: Number(clientData.counterQuantity || 1),
           date: clientData.date,
           sheets,
           pipes,
           angles,
           purchased,
           compressor,
-          materialRate: parseFloat(pricingInputs.materialRate) || 0,
-          labourCost: parseFloat(pricingInputs.labourCost) || 0,
-          discount: parseFloat(pricingInputs.discount) || 0,
-          gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
+          totalSheetWeight: calculation.totalSheetWeight,
+          totalPipeWeight: calculation.totalPipeWeight,
+          totalAngleWeight: calculation.totalAngleWeight,
           totalMaterialWeight: calculation.totalWeight,
+          sheetRate: parseFloat(pricingInputs.sheetRate) || parseFloat(pricingInputs.materialRate) || 250,
+          pipeRate: parseFloat(pricingInputs.pipeRate) || 270,
+          angleRate: parseFloat(pricingInputs.angleRate) || 220,
+          materialRate: parseFloat(pricingInputs.sheetRate) || parseFloat(pricingInputs.materialRate) || 250,
+          sheetCost: calculation.sheetCost,
+          pipeCost: calculation.pipeCost,
+          angleCost: calculation.angleCost,
           materialCost: calculation.materialCost,
+          labourRate: parseFloat(pricingInputs.labourRate) || 0,
+          labourCost: calculation.labourCost,
           purchasedItemCost: calculation.purchasedItemCost,
-          discountedMaterialCost: calculation.discountedMaterialCost,
-          taxableAmount: calculation.taxableAmount,
+          subtotal: calculation.subtotal,
+          sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
+          sellingAmount: calculation.sellingAmount || 0,
+          sellingPrice: calculation.unitSellingPrice,
+          gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
           gstAmount: calculation.gstAmount,
-          totalAmount: calculation.grandTotal,
-          grandTotal: calculation.grandTotal
+          discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
+          finalTotal: calculation.finalTotal,
+          grandTotal: calculation.finalTotal,
+          totalAmount: calculation.finalTotal
         }
       };
 
@@ -771,13 +801,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       });
 
       if (res.ok) {
-        showStatus('success', projectToEdit ? 'Project updated successfully!' : 'Project saved successfully!');
+        showStatus('success', projectToEdit ? 'Estimate updated successfully!' : 'Estimate saved successfully!');
         if (onSaveSuccess) {
           setTimeout(() => onSaveSuccess(), 1000);
         }
       } else {
         const err = await res.json();
-        showStatus('error', err.error || 'Failed to save project.');
+        showStatus('error', err.error || 'Failed to save estimate.');
       }
     } catch (e) {
       console.error(e);
@@ -787,7 +817,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     }
   };
 
-  // Action: Generate Estimate (Download PDF)
+  // Action: Generate Bill / Download Quotation PDF (Section 35)
   const handleGeneratePDF = () => {
     if (!clientData.customerName.trim()) {
       showStatus('warning', 'Please provide a Customer Name in Step 1.');
@@ -813,13 +843,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
         angles,
         purchased,
         compressor,
+        totalMaterialWeight: calculation.totalWeight,
         materialRate: parseFloat(pricingInputs.materialRate) || 0,
-        labourCost: parseFloat(pricingInputs.labourCost) || 0,
-        discount: parseFloat(pricingInputs.discount) || 0,
-        gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
-        totalMaterialWeight: calculation.totalWeight
+        labourRate: parseFloat(pricingInputs.labourRate) || 0,
+        labourCost: calculation.labourCost,
+        subtotal: calculation.subtotal,
+        sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
+        sellingPrice: calculation.unitSellingPrice,
+        counterQuantity: clientData.counterQuantity || '1',
+        discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
+        gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
+        finalTotal: calculation.finalTotal
       }, { shouldPrint: false });
-      showStatus('success', 'Quotation PDF generated and downloaded.');
+      showStatus('success', 'Quotation / Bill generated and downloaded.');
     } catch (e) {
       console.error('PDF Generation Error:', e);
       showStatus('error', 'Failed to generate PDF quotation.');
@@ -852,11 +888,17 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
         angles,
         purchased,
         compressor,
+        totalMaterialWeight: calculation.totalWeight,
         materialRate: parseFloat(pricingInputs.materialRate) || 0,
-        labourCost: parseFloat(pricingInputs.labourCost) || 0,
-        discount: parseFloat(pricingInputs.discount) || 0,
-        gst: pricingInputs.gst !== '' ? parseFloat(pricingInputs.gst) : DEFAULT_GST_PERCENT,
-        totalMaterialWeight: calculation.totalWeight
+        labourRate: parseFloat(pricingInputs.labourRate) || 0,
+        labourCost: calculation.labourCost,
+        subtotal: calculation.subtotal,
+        sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
+        sellingPrice: calculation.unitSellingPrice,
+        counterQuantity: clientData.counterQuantity || '1',
+        discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
+        gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
+        finalTotal: calculation.finalTotal
       }, { shouldPrint: true });
     } catch (e) {
       console.error('Print Error:', e);
@@ -874,8 +916,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       {/* Toast Notification */}
       {statusMessage && (
         <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl border shadow-xl animate-in fade-in slide-in-from-top-4 duration-200 ${statusMessage.type === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
-            statusMessage.type === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' :
-              'bg-rose-50 border-rose-300 text-rose-800'
+          statusMessage.type === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' :
+            'bg-rose-50 border-rose-300 text-rose-800'
           }`}>
           {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" /> : <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />}
           <span className="text-xs font-bold">{statusMessage.text}</span>
@@ -892,14 +934,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             </h1>
           </div>
           <p className="text-slate-500 text-xs font-medium">
-            Single-source Material Master driven commercial fabrication estimate generator
+            Commercial Kitchen Equipment Fabrication Master Estimation & Bill Generator
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={handleRefreshRates}
+            disabled={isRefreshingRates}
+            className="btn-3d btn-3d-slate px-3.5 py-2 text-xs cursor-pointer disabled:opacity-50"
+            title="Refresh Rates & Master Catalog"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 text-blue-600 ${isRefreshingRates ? 'animate-spin' : ''}`} />
+            {isRefreshingRates ? 'Refreshing...' : 'Refresh Rates'}
+          </button>
+          <button
             onClick={handleResetNewCounter}
-            className="btn-3d btn-3d-slate px-3.5 py-2 text-xs"
+            className="btn-3d btn-3d-slate px-3.5 py-2 text-xs cursor-pointer"
             title="Reset to New Counter"
           >
             <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
@@ -907,7 +958,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           </button>
           <button
             onClick={handlePrintQuotation}
-            className="btn-3d btn-3d-slate px-3.5 py-2 text-xs"
+            className="btn-3d btn-3d-slate px-3.5 py-2 text-xs cursor-pointer"
             title="Print Quotation"
           >
             <Printer className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
@@ -915,49 +966,53 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           </button>
           <button
             onClick={handleGeneratePDF}
-            className="btn-3d px-4 py-2 text-xs bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20 border border-slate-700"
-            title="Download Quotation PDF"
+            className="btn-3d px-4 py-2 text-xs bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20 border border-slate-700 cursor-pointer"
+            title="Generate & Download Quotation Bill"
           >
             <Download className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
-            Generate PDF
+            Generate Bill
           </button>
           <button
             onClick={handleSaveProject}
             disabled={loading}
-            className="btn-3d btn-3d-emerald px-5 py-2 text-xs shadow-md shadow-emerald-600/20 disabled:opacity-50"
+            className="btn-3d btn-3d-emerald px-5 py-2 text-xs shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
-            {projectToEdit ? 'Update Project' : 'Save Project'}
+            {projectToEdit ? 'Update Estimate' : 'Save Estimate'}
           </button>
         </div>
       </div>
 
-      {/* Modern 3D 3-Step Wizard Navigation */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      {/* 4-Step Wizard Navigation */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           {
             step: 1,
             label: 'Step 1',
             name: 'Client & Counter Selection',
             activeStyle: 'bg-linear-to-r from-blue-50/90 to-indigo-50/60 border-blue-400 text-blue-900 shadow-sm ring-2 ring-blue-500/15',
-            badgeActive: 'bg-blue-600 text-white shadow-xs',
-            themeColor: 'text-blue-600'
+            badgeActive: 'bg-blue-600 text-white shadow-xs'
           },
           {
             step: 2,
             label: 'Step 2',
             name: 'Material Specifications',
             activeStyle: 'bg-linear-to-r from-teal-50/90 to-cyan-50/60 border-teal-400 text-teal-900 shadow-sm ring-2 ring-teal-500/15',
-            badgeActive: 'bg-teal-600 text-white shadow-xs',
-            themeColor: 'text-teal-600'
+            badgeActive: 'bg-teal-600 text-white shadow-xs'
           },
           {
             step: 3,
             label: 'Step 3',
-            name: 'Weight & Pricing Summary',
+            name: 'Weight Summary & Labour',
             activeStyle: 'bg-linear-to-r from-violet-50/90 to-purple-50/60 border-violet-400 text-violet-900 shadow-sm ring-2 ring-violet-500/15',
-            badgeActive: 'bg-violet-600 text-white shadow-xs',
-            themeColor: 'text-violet-600'
+            badgeActive: 'bg-violet-600 text-white shadow-xs'
+          },
+          {
+            step: 4,
+            label: 'Step 4',
+            name: 'Selling Price & Bill',
+            activeStyle: 'bg-linear-to-r from-emerald-50/90 to-teal-50/60 border-emerald-400 text-emerald-900 shadow-sm ring-2 ring-emerald-500/15',
+            badgeActive: 'bg-emerald-600 text-white shadow-xs'
           }
         ].map((s) => {
           const isActive = currentStep === s.step;
@@ -965,9 +1020,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             <button
               key={s.step}
               onClick={() => setCurrentStep(s.step)}
-              className={`card-3d-interactive flex items-center justify-between p-4 text-left cursor-pointer transition-all ${isActive
-                  ? `${s.activeStyle} border-2`
-                  : 'bg-white hover:bg-slate-50/80 border-slate-200'
+              className={`card-3d-interactive flex items-center justify-between p-3.5 sm:p-4 text-left cursor-pointer transition-all ${isActive
+                ? `${s.activeStyle} border-2`
+                : 'bg-white hover:bg-slate-50/80 border-slate-200'
                 }`}
             >
               <div>
@@ -988,7 +1043,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* STEP 1 — CLIENT DATA */}
+      {/* STEP 1 — CLIENT & COUNTER SELECTION */}
       {/* ========================================================================= */}
       {currentStep === 1 && (
         <div className="card-3d p-6 lg:p-8 max-w-4xl mx-auto">
@@ -1036,18 +1091,34 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               />
             </div>
 
-            {/* Phone */}
+            {/* Mobile Number (Mandatory 10 digits) */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Phone Number
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Mobile Number *
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">10 Digits</span>
+              </div>
               <input
                 type="tel"
-                placeholder="e.g. +91 98765 43210"
+                maxLength={10}
+                placeholder="e.g. 9604386808"
                 value={clientData.phone}
-                onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
-                className="w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 focus:outline-none text-xs transition-all"
+                onBlur={() => setPhoneTouched(true)}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setClientData({ ...clientData, phone: cleaned });
+                }}
+                className={`w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border ${phoneTouched && !isPhoneValid
+                  ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                  : 'border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15'
+                  } focus:outline-none text-xs font-bold transition-all`}
               />
+              {phoneTouched && !isPhoneValid && (
+                <p className="text-[11px] text-rose-600 font-semibold mt-1">
+                  Enter a valid 10-digit mobile number.
+                </p>
+              )}
             </div>
 
             {/* Email */}
@@ -1078,8 +1149,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               />
             </div>
 
-            {/* Counter Type Selector */}
-            <div className={`p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 space-y-2 ${currentCounterConfig.hasSubtypes ? 'md:col-span-1' : 'md:col-span-2'}`}>
+            {/* Counter Type Selector (Renamed Table -> Working Table, Bain Marie, etc.) */}
+            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="block text-[11px] font-black text-slate-900 uppercase tracking-wider">
                   Select Counter Type *
@@ -1089,7 +1160,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               <select
                 value={clientData.counterType}
                 onChange={(e) => handleCounterTypeChange(e.target.value)}
-                className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 focus:outline-none text-xs font-black shadow-2xs"
+                className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 focus:outline-none text-xs font-black shadow-2xs cursor-pointer"
               >
                 <option value="">-- Choose Counter Type --</option>
                 {availableCounterTypes.map(ct => (
@@ -1098,9 +1169,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               </select>
             </div>
 
-            {/* Conditionally Render Subtype Selector (e.g. Storage Bin, Fridge, Gas Range, Shawarma Cabin) */}
-            {currentCounterConfig.hasSubtypes && (
-              <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-300 space-y-2 md:col-span-1 animate-in fade-in duration-200 shadow-2xs">
+            {/* Conditionally Render Subtype Selector (Storage Bin, Fridge, Pizza Makeline, Work Top, Gas Range, Shawarma) */}
+            {currentCounterConfig.hasSubtypes ? (
+              <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-300 space-y-2 animate-in fade-in duration-200 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <label className="block text-[11px] font-black text-blue-900 uppercase tracking-wider">
                     {currentCounterConfig.subtypeLabel || 'Counter Subtype'} *
@@ -1110,7 +1181,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 <select
                   value={clientData.counterSubtype}
                   onChange={(e) => handleSubtypeChange(e.target.value)}
-                  className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-xs font-black shadow-2xs"
+                  className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-xs font-black shadow-2xs cursor-pointer"
                 >
                   <option value="">-- Select {currentCounterConfig.subtypeLabel} --</option>
                   {currentCounterConfig.subtypes.map(st => (
@@ -1118,14 +1189,52 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   ))}
                 </select>
               </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200 space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Counter Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="1"
+                  value={clientData.counterQuantity || '1'}
+                  onChange={(e) => setClientData({ ...clientData, counterQuantity: sanitizeNumericInput(e.target.value) || '1' })}
+                  className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:outline-none text-xs font-bold shadow-2xs"
+                />
+              </div>
+            )}
+
+            {currentCounterConfig.hasSubtypes && (
+              <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200 space-y-2 md:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Counter Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="1"
+                  value={clientData.counterQuantity || '1'}
+                  onChange={(e) => setClientData({ ...clientData, counterQuantity: sanitizeNumericInput(e.target.value) || '1' })}
+                  className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:outline-none text-xs font-bold shadow-2xs"
+                />
+              </div>
             )}
           </div>
 
           <div className="flex items-center justify-end pt-6 border-t border-slate-100 mt-6">
             <button
+              disabled={!clientData.customerName.trim() || !isPhoneValid || !clientData.counterType || (currentCounterConfig.hasSubtypes && !clientData.counterSubtype)}
               onClick={() => {
+                setPhoneTouched(true);
                 if (!clientData.customerName.trim()) {
                   showStatus('warning', 'Please enter a Customer Name.');
+                  return;
+                }
+                if (!isPhoneValid) {
+                  showStatus('warning', 'Enter a valid 10-digit mobile number.');
                   return;
                 }
                 if (!clientData.counterType) {
@@ -1138,17 +1247,17 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 }
                 setCurrentStep(2);
               }}
-              className="btn-3d btn-3d-blue px-6 py-2.5 text-xs shadow-md"
+              className="btn-3d btn-3d-blue px-6 py-2.5 text-xs shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Continue to Material Specifications
-              <ArrowRight className="w-4 h-4 ml-1.5" />
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* STEP 2 — MATERIAL SPECIFICATIONS */}
+      {/* STEP 2 — MATERIAL SPECIFICATIONS (WITHOUT 3D) */}
       {/* ========================================================================= */}
       {currentStep === 2 && (
         <div className="space-y-6 w-full">
@@ -1170,7 +1279,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsAddMaterialModalOpen(true)}
-                className="btn-3d btn-3d-emerald px-4 py-2 text-xs shadow-sm"
+                className="btn-3d btn-3d-emerald px-4 py-2 text-xs shadow-sm cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Add Component Row
@@ -1204,13 +1313,17 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 <div className="flex items-center gap-3.5 flex-wrap">
                   <span className="text-slate-300">Sheets: <strong className="text-teal-400 font-bold">{sheets.length}</strong></span>
                   <span className="text-slate-300">Pipes: <strong className="text-sky-400 font-bold">{pipes.length}</strong></span>
-                  <span className="text-slate-300">Angles: <strong className="text-amber-400 font-bold">{angles.length}</strong></span>
+                  {currentCounterConfig.requiresAngle && (
+                    <span className="text-slate-300">Angles: <strong className="text-amber-400 font-bold">{angles.length}</strong></span>
+                  )}
                   <span className="text-slate-300">Purchase Items: <strong className="text-indigo-400 font-bold">{purchased.length}</strong></span>
-                  <span className="text-slate-300">Refrigeration: <strong className="text-rose-400 font-bold">{compressor.length}</strong></span>
+                  {compressor.length > 0 && (
+                    <span className="text-slate-300">Refrigeration: <strong className="text-rose-400 font-bold">{compressor.length}</strong></span>
+                  )}
                 </div>
               </div>
 
-              {/* 1. SHEET MATERIALS TABLE (TEAL / CYAN THEME) */}
+              {/* 1. SHEET MATERIALS TABLE */}
               <div className="card-3d p-5 w-full border-teal-200/80 bg-linear-to-b from-white to-teal-50/10">
                 <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -1224,7 +1337,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     <button
                       type="button"
                       onClick={() => handleAddNewMaterial('SHEET')}
-                      className="btn-3d btn-3d-teal px-3 py-1 text-xs"
+                      className="btn-3d btn-3d-teal px-3 py-1 text-xs cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1" />
                       Add Sheet
@@ -1234,11 +1347,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
                 {sheets.length === 0 ? (
                   <div className="py-7 text-center bg-teal-50/20 rounded-xl border border-dashed border-teal-200">
-                    <p className="text-xs text-slate-500 font-medium mb-3">No sheet materials in this estimate specification.</p>
+                    <p className="text-xs text-slate-500 font-medium mb-3">No sheet materials configured for this counter.</p>
                     <button
                       type="button"
                       onClick={() => handleAddNewMaterial('SHEET')}
-                      className="btn-3d btn-3d-teal px-4 py-1.5 text-xs inline-flex items-center"
+                      className="btn-3d btn-3d-teal px-4 py-1.5 text-xs inline-flex items-center cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1.5" />
                       + Add Sheet Material
@@ -1252,12 +1365,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                           <th className="py-2.5 px-3">Material</th>
                           <th className="py-2.5 px-3 w-28">Grade</th>
                           <th className="py-2.5 px-3 w-24">Length (in)</th>
-                          <th className="py-2.5 px-3 w-24">Width (in)</th>
+                          <th className="py-2.5 px-3 w-24">Width / Height (in)</th>
+                          {currentCounterConfig.hasDepth && (
+                            <th className="py-2.5 px-3 w-24 bg-blue-50/50 text-blue-900">Depth (in)</th>
+                          )}
                           <th className="py-2.5 px-3 w-36">Gauge</th>
                           <th className="py-2.5 px-3 w-20">Quantity</th>
                           <th className="py-2.5 px-3 text-center w-16">Unit</th>
                           <th className="py-2.5 px-3 text-right w-28">Weight</th>
-                          <th className="py-2.5 px-2 text-center w-10"></th>
+                          <th className="py-2.5 px-2 text-center w-20">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
@@ -1265,6 +1381,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                           const rowWeight = calculateRowWeight(row);
                           const currentGrade = row.grade ? String(row.grade).replace(/^SS/i, '') : '304';
                           const hasCustomGaugeOpts = Array.isArray(row.gaugeOptions) && row.gaugeOptions.length > 0;
+                          const isCovering = (row.material || '').toLowerCase().includes('covering');
 
                           return (
                             <tr key={row.id || idx} className="hover:bg-teal-50/30 transition-colors">
@@ -1281,7 +1398,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 <select
                                   value={currentGrade}
                                   onChange={(e) => updateSheetRow(idx, 'grade', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs font-semibold"
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs font-semibold cursor-pointer"
                                 >
                                   {SHEET_GRADES.map(g => (
                                     <option key={g} value={g}>{g}</option>
@@ -1304,31 +1421,53 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   type="number"
                                   step="any"
                                   min="0"
-                                  placeholder="Width"
-                                  value={row.width !== undefined && row.width !== null ? row.width : ''}
-                                  onChange={(e) => updateSheetRow(idx, 'width', sanitizeNumericInput(e.target.value))}
+                                  placeholder={isCovering ? 'Height' : 'Width'}
+                                  value={(row.width !== undefined && row.width !== null && row.width !== '') ? row.width : (row.height !== undefined && row.height !== null ? row.height : '')}
+                                  onChange={(e) => {
+                                    const v = sanitizeNumericInput(e.target.value);
+                                    setSheets(prev => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], width: v, height: v };
+                                      return copy;
+                                    });
+                                  }}
                                   className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs text-right font-semibold"
                                 />
                               </td>
+                              {currentCounterConfig.hasDepth && (
+                                <td className="py-2 px-3 bg-blue-50/20">
+                                  {(row.material || '').toLowerCase().includes('sink') || (row.material || '').toLowerCase().includes('bowl') ? (
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      placeholder="Depth"
+                                      value={row.depth !== undefined && row.depth !== null ? row.depth : ''}
+                                      onChange={(e) => updateSheetRow(idx, 'depth', sanitizeNumericInput(e.target.value))}
+                                      className="w-full bg-white text-blue-900 px-2.5 py-1.5 rounded-lg border border-blue-200 focus:border-blue-500 focus:outline-none text-xs text-right font-bold"
+                                    />
+                                  ) : (
+                                    <span className="text-slate-300 text-xs text-center block font-mono">—</span>
+                                  )}
+                                </td>
+                              )}
                               <td className="py-2 px-3">
                                 {hasCustomGaugeOpts ? (
                                   <select
                                     value={row.gauge !== undefined && row.gauge !== '' ? row.gauge : ''}
                                     onChange={(e) => updateSheetRow(idx, 'gauge', e.target.value ? parseFloat(e.target.value) : '')}
-                                    className="w-full bg-teal-50/80 text-teal-900 px-2.5 py-1.5 rounded-lg border border-teal-300 focus:border-teal-500 focus:outline-none text-xs font-black shadow-2xs"
+                                    className="w-full bg-teal-50/80 text-teal-900 px-2.5 py-1.5 rounded-lg border border-teal-300 focus:border-teal-500 focus:outline-none text-xs font-black shadow-2xs cursor-pointer"
                                   >
                                     <option value="">Select Gauge</option>
                                     {row.gaugeOptions.map(g => (
-                                      <option key={g} value={g}>
-                                        {g} mm ({STANDARD_GAUGE_WEIGHTS[g] ? `${STANDARD_GAUGE_WEIGHTS[g]} kg/sq.ft` : `${g} mm`})
-                                      </option>
+                                      <option key={g} value={g}>{g} mm</option>
                                     ))}
                                   </select>
                                 ) : (
                                   <select
                                     value={row.gauge !== undefined && row.gauge !== '' ? row.gauge : ''}
                                     onChange={(e) => updateSheetRow(idx, 'gauge', e.target.value ? parseFloat(e.target.value) : '')}
-                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs font-semibold"
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs font-semibold cursor-pointer"
                                   >
                                     <option value="">Select Gauge</option>
                                     {STANDARD_GAUGES.map(g => (
@@ -1355,13 +1494,24 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 {formatWeight(rowWeight)}
                               </td>
                               <td className="py-2 px-2 text-center">
-                                <button
-                                  onClick={() => deleteSheetRow(idx)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Remove Row"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddMoreSheetRow(idx)}
+                                    className="p-1 text-teal-600 hover:text-teal-900 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                                    title="+ Add More directly below this row"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteSheetRow(idx)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Remove Row"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1372,7 +1522,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 )}
               </div>
 
-              {/* 2. PIPE MATERIALS TABLE (SKY / BLUE THEME) */}
+              {/* 2. PIPE MATERIALS TABLE (Dedicated Pipe Gauge on Every Row) */}
               <div className="card-3d p-5 w-full border-sky-200/80 bg-linear-to-b from-white to-sky-50/10">
                 <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -1386,7 +1536,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     <button
                       type="button"
                       onClick={() => handleAddNewMaterial('PIPE')}
-                      className="btn-3d btn-3d-sky px-3 py-1 text-xs"
+                      className="btn-3d btn-3d-sky px-3 py-1 text-xs cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1" />
                       Add Pipe
@@ -1396,11 +1546,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
                 {pipes.length === 0 ? (
                   <div className="py-7 text-center bg-sky-50/20 rounded-xl border border-dashed border-sky-200">
-                    <p className="text-xs text-slate-500 font-medium mb-3">No pipe materials in this estimate specification.</p>
+                    <p className="text-xs text-slate-500 font-medium mb-3">No pipe materials configured for this counter.</p>
                     <button
                       type="button"
                       onClick={() => handleAddNewMaterial('PIPE')}
-                      className="btn-3d btn-3d-sky px-4 py-1.5 text-xs inline-flex items-center"
+                      className="btn-3d btn-3d-sky px-4 py-1.5 text-xs inline-flex items-center cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1.5" />
                       + Add Pipe Material
@@ -1412,18 +1562,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
                           <th className="py-2.5 px-3">Material</th>
-                          <th className="py-2.5 px-3 w-28">Grade</th>
-                          <th className="py-2.5 px-3 w-48">Pipe Gauge</th>
-                          <th className="py-2.5 px-3 w-28 text-right">Length (ft)</th>
-                          <th className="py-2.5 px-3 w-24 text-right">Quantity</th>
-                          <th className="py-2.5 px-3 text-right w-28">Weight</th>
-                          <th className="py-2.5 px-2 text-center w-10"></th>
+                          <th className="py-2.5 px-3 w-24">Grade</th>
+                          <th className="py-2.5 px-3 w-36">Pipe Size</th>
+                          <th className="py-2.5 px-3 w-28">Pipe Gauge</th>
+                          <th className="py-2.5 px-3 w-24 text-right">Length</th>
+                          <th className="py-2.5 px-3 w-20 text-center">Unit</th>
+                          <th className="py-2.5 px-3 w-20 text-right">Quantity</th>
+                          <th className="py-2.5 px-3 text-right w-24">Weight</th>
+                          <th className="py-2.5 px-2 text-center w-16">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
                         {pipes.map((row, idx) => {
                           const rowWeight = calculateRowWeight(row);
                           const currentGrade = row.grade ? String(row.grade).replace(/^SS/i, '') : '304';
+                          const currentSize = row.pipeSize || row.size || '1.5" (38 × 38 mm)';
+                          const currentGauge = row.pipeGauge || row.gauge || '1.2 mm';
+
                           return (
                             <tr key={row.id || idx} className="hover:bg-sky-50/30 transition-colors">
                               <td className="py-2 px-3">
@@ -1439,22 +1594,34 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 <select
                                   value={currentGrade}
                                   onChange={(e) => updatePipeRow(idx, 'grade', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs font-semibold"
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs font-semibold cursor-pointer"
                                 >
                                   {STAINLESS_STEEL_GRADES.map(g => (
                                     <option key={g} value={g}>{g}</option>
                                   ))}
                                 </select>
                               </td>
+                              {/* Dedicated Pipe Size Dropdown */}
                               <td className="py-2 px-3">
                                 <select
-                                  value={row.pipeSize || ''}
+                                  value={currentSize}
                                   onChange={(e) => updatePipeRow(idx, 'pipeSize', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs font-semibold"
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs font-semibold cursor-pointer"
                                 >
-                                  <option value="">Select Pipe Gauge</option>
-                                  {PIPE_MASTER.map(p => (
-                                    <option key={p.id} value={p.label}>{p.label}</option>
+                                  {PIPE_SIZE_OPTIONS.map(ps => (
+                                    <option key={ps} value={ps}>{ps}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              {/* Dedicated Pipe Gauge Dropdown */}
+                              <td className="py-2 px-3">
+                                <select
+                                  value={currentGauge}
+                                  onChange={(e) => updatePipeRow(idx, 'pipeGauge', e.target.value)}
+                                  className="w-full bg-sky-50 text-sky-950 px-2 py-1.5 rounded-lg border border-sky-300 focus:border-sky-500 focus:outline-none text-xs font-bold shadow-2xs cursor-pointer"
+                                >
+                                  {PIPE_GAUGE_OPTIONS.map(pg => (
+                                    <option key={pg} value={pg}>{pg}</option>
                                   ))}
                                 </select>
                               </td>
@@ -1463,11 +1630,21 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   type="number"
                                   step="any"
                                   min="0"
-                                  placeholder="Length (ft)"
+                                  placeholder="Length"
                                   value={row.length !== undefined && row.length !== null ? row.length : ''}
                                   onChange={(e) => updatePipeRow(idx, 'length', sanitizeNumericInput(e.target.value))}
                                   className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs text-right font-semibold"
                                 />
+                              </td>
+                              <td className="py-2 px-2">
+                                <select
+                                  value={row.unit || 'ft'}
+                                  onChange={(e) => updatePipeRow(idx, 'unit', e.target.value)}
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-1.5 py-1.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none text-xs font-semibold cursor-pointer text-center"
+                                >
+                                  <option value="ft">ft</option>
+                                  <option value="inch">inch</option>
+                                </select>
                               </td>
                               <td className="py-2 px-3">
                                 <input
@@ -1484,13 +1661,24 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 {formatWeight(rowWeight)}
                               </td>
                               <td className="py-2 px-2 text-center">
-                                <button
-                                  onClick={() => deletePipeRow(idx)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Remove Row"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddMorePipeRow(idx)}
+                                    className="p-1 text-sky-600 hover:text-sky-900 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                                    title="+ Add More directly below this row"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deletePipeRow(idx)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Remove Row"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1501,122 +1689,135 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 )}
               </div>
 
-              {/* 3. ANGLE MATERIALS TABLE (AMBER / ORANGE THEME) */}
-              <div className="card-3d p-5 w-full border-amber-200/80 bg-linear-to-b from-white to-amber-50/10">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-2xs"></span>
-                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Angle Materials</h3>
+              {/* 3. ANGLE MATERIALS TABLE (CONDITIONAL: ONLY SHOWN IF REQUIRES ANGLE, E.G. GAS RANGE) */}
+              {currentCounterConfig.requiresAngle && (
+                <div className="card-3d p-5 w-full border-amber-200/80 bg-linear-to-b from-white to-amber-50/10 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-2xs"></span>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Angle Materials</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                        {angles.length} component(s)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddNewMaterial('ANGLE')}
+                        className="btn-3d btn-3d-amber px-3 py-1 text-xs cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Add Angle
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                      {angles.length} component(s)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleAddNewMaterial('ANGLE')}
-                      className="btn-3d btn-3d-amber px-3 py-1 text-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1" />
-                      Add Angle
-                    </button>
-                  </div>
+
+                  {angles.length === 0 ? (
+                    <div className="py-7 text-center bg-amber-50/20 rounded-xl border border-dashed border-amber-200">
+                      <p className="text-xs text-slate-500 font-medium mb-3">No angle structural materials added.</p>
+                      <button
+                        type="button"
+                        onClick={() => handleAddNewMaterial('ANGLE')}
+                        className="btn-3d btn-3d-amber px-4 py-1.5 text-xs inline-flex items-center cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        + Add Angle Material
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full overflow-x-auto rounded-xl border border-slate-200/90 shadow-2xs">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
+                            <th className="py-2.5 px-3">Material</th>
+                            <th className="py-2.5 px-3 w-48">Gauge</th>
+                            <th className="py-2.5 px-3 w-28 text-right">Length (ft)</th>
+                            <th className="py-2.5 px-3 w-24 text-right">Quantity</th>
+                            <th className="py-2.5 px-3 text-right w-28">Weight</th>
+                            <th className="py-2.5 px-2 text-center w-20">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
+                          {angles.map((row, idx) => {
+                            const rowWeight = calculateAngleWeight(row);
+                            return (
+                              <tr key={row.id || idx} className="hover:bg-amber-50/30 transition-colors">
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="text"
+                                    placeholder="Angle Material Name"
+                                    value={row.material || ''}
+                                    onChange={(e) => updateAngleRow(idx, 'material', e.target.value)}
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 focus:outline-none text-xs font-semibold"
+                                  />
+                                </td>
+                                <td className="py-2 px-3">
+                                  <select
+                                    value={row.gauge || '25 × 3 mm'}
+                                    onChange={(e) => updateAngleRow(idx, 'gauge', e.target.value)}
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs font-semibold cursor-pointer"
+                                  >
+                                    {ANGLE_GAUGE_OPTIONS.map(g => (
+                                      <option key={g} value={g}>{g}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    placeholder="Length (ft)"
+                                    value={row.length !== undefined && row.length !== null ? row.length : ''}
+                                    onChange={(e) => updateAngleRow(idx, 'length', sanitizeNumericInput(e.target.value))}
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-semibold"
+                                  />
+                                </td>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    placeholder="Qty"
+                                    value={row.quantity !== undefined && row.quantity !== null ? row.quantity : ''}
+                                    onChange={(e) => updateAngleRow(idx, 'quantity', sanitizeNumericInput(e.target.value))}
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-bold"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-right font-black text-amber-700">
+                                  {formatWeight(rowWeight)}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddMoreAngleRow(idx)}
+                                      className="p-1 text-amber-600 hover:text-amber-900 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                      title="+ Add More directly below this row"
+                                    >
+                                      <PlusCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteAngleRow(idx)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Remove Row"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {angles.length === 0 ? (
-                  <div className="py-7 text-center bg-amber-50/20 rounded-xl border border-dashed border-amber-200">
-                    <p className="text-xs text-slate-500 font-medium mb-3">No angle structural materials in this estimate specification.</p>
-                    <button
-                      type="button"
-                      onClick={() => handleAddNewMaterial('ANGLE')}
-                      className="btn-3d btn-3d-amber px-4 py-1.5 text-xs inline-flex items-center"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1.5" />
-                      + Add Angle Material
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-full overflow-x-auto rounded-xl border border-slate-200/90 shadow-2xs">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
-                          <th className="py-2.5 px-3">Material</th>
-                          <th className="py-2.5 px-3 w-48">Gauge</th>
-                          <th className="py-2.5 px-3 w-28 text-right">Length (ft)</th>
-                          <th className="py-2.5 px-3 w-24 text-right">Quantity</th>
-                          <th className="py-2.5 px-3 text-right w-28">Weight</th>
-                          <th className="py-2.5 px-2 text-center w-10"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
-                        {angles.map((row, idx) => {
-                          const rowWeight = calculateAngleWeight(row);
-                          return (
-                            <tr key={row.id || idx} className="hover:bg-amber-50/30 transition-colors">
-                              <td className="py-2 px-3">
-                                <input
-                                  type="text"
-                                  placeholder="Angle Material Name"
-                                  value={row.material || ''}
-                                  onChange={(e) => updateAngleRow(idx, 'material', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 focus:outline-none text-xs font-semibold"
-                                />
-                              </td>
-                              <td className="py-2 px-3">
-                                <select
-                                  value={row.gauge || '25 × 3 mm'}
-                                  onChange={(e) => updateAngleRow(idx, 'gauge', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs font-semibold"
-                                >
-                                  {ANGLE_GAUGE_OPTIONS.map(g => (
-                                    <option key={g} value={g}>{g}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="py-2 px-3">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  min="0"
-                                  placeholder="Length (ft)"
-                                  value={row.length !== undefined && row.length !== null ? row.length : ''}
-                                  onChange={(e) => updateAngleRow(idx, 'length', sanitizeNumericInput(e.target.value))}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-semibold"
-                                />
-                              </td>
-                              <td className="py-2 px-3">
-                                <input
-                                  type="number"
-                                  min="1"
-                                  step="1"
-                                  placeholder="Qty"
-                                  value={row.quantity !== undefined && row.quantity !== null ? row.quantity : ''}
-                                  onChange={(e) => updateAngleRow(idx, 'quantity', sanitizeNumericInput(e.target.value))}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-bold"
-                                />
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-amber-700">
-                                {formatWeight(rowWeight)}
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <button
-                                  onClick={() => deleteAngleRow(idx)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Remove Row"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* 4. PURCHASED ITEMS TABLE (INDIGO / VIOLET THEME) */}
+              {/* 4. PURCHASED ITEMS TABLE */}
               <div className="card-3d p-5 w-full border-indigo-200/80 bg-linear-to-b from-white to-indigo-50/10">
                 <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -1633,7 +1834,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                         setSelectedCatalogCategory('Purchased');
                         setIsAddMaterialModalOpen(true);
                       }}
-                      className="btn-3d btn-3d-indigo px-3 py-1 text-xs"
+                      className="btn-3d btn-3d-indigo px-3 py-1 text-xs cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1" />
                       Add Purchased Item
@@ -1643,14 +1844,14 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
                 {purchased.length === 0 ? (
                   <div className="py-7 text-center bg-indigo-50/20 rounded-xl border border-dashed border-indigo-200">
-                    <p className="text-xs text-slate-500 font-medium mb-3">No purchased or hardware items added to this estimate.</p>
+                    <p className="text-xs text-slate-500 font-medium mb-3">No purchased items configured for this counter.</p>
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedCatalogCategory('Purchased');
                         setIsAddMaterialModalOpen(true);
                       }}
-                      className="btn-3d btn-3d-indigo px-4 py-1.5 text-xs inline-flex items-center"
+                      className="btn-3d btn-3d-indigo px-4 py-1.5 text-xs inline-flex items-center cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 mr-1.5" />
                       + Add Purchased Item
@@ -1693,7 +1894,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   <select
                                     value={row.size || opts[0]}
                                     onChange={(e) => updatePurchasedRow(idx, 'size', e.target.value)}
-                                    className="w-full bg-indigo-50/80 text-indigo-950 px-2 py-1.5 rounded-lg border border-indigo-300 focus:border-indigo-500 focus:outline-none text-xs font-bold shadow-2xs"
+                                    className="w-full bg-indigo-50/80 text-indigo-950 px-2 py-1.5 rounded-lg border border-indigo-300 focus:border-indigo-500 focus:outline-none text-xs font-bold shadow-2xs cursor-pointer"
                                   >
                                     {opts.map(s => (
                                       <option key={s} value={s}>{s}</option>
@@ -1729,20 +1930,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 {totalPriceDisplay}
                               </td>
                               <td className="py-2 px-2 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {(row.allowMultiple || (opts && opts.length > 0)) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAddRepeatablePurchasedItem(row)}
-                                      className="p-1.5 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                                      title={`+ Add Another ${row.material || 'Item'}`}
-                                    >
-                                      <PlusCircle className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                <div className="flex items-center justify-center gap-1">
                                   <button
+                                    type="button"
+                                    onClick={() => handleAddMorePurchasedRow(idx)}
+                                    className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                    title="+ Add More directly below this row"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => deletePurchasedRow(idx)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                     title="Remove Row"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1758,53 +1958,26 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 )}
               </div>
 
-              {/* 5. COMPRESSOR & REFRIGERATION MATERIALS TABLE (ROSE / PURPLE THEME) */}
-              <div className="card-3d p-5 w-full border-rose-200/80 bg-linear-to-b from-white to-rose-50/10">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-2xs"></span>
-                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Compressor & Refrigeration Unit</h3>
+              {/* 5. COMPRESSOR & REFRIGERATION MATERIALS TABLE (If applicable) */}
+              {compressor.length > 0 && (
+                <div className="card-3d p-5 w-full border-rose-200/80 bg-linear-to-b from-white to-rose-50/10">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-2xs"></span>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Compressor & Refrigeration Unit</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-rose-800 font-bold bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                        {compressor.length} component(s)
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-rose-800 font-bold bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
-                      {compressor.length} component(s)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedCatalogCategory('Compressor');
-                        setIsAddMaterialModalOpen(true);
-                      }}
-                      className="btn-3d px-3 py-1 text-xs bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1" />
-                      Add Refrigeration Component
-                    </button>
-                  </div>
-                </div>
 
-                {compressor.length === 0 ? (
-                  <div className="py-7 text-center bg-rose-50/20 rounded-xl border border-dashed border-rose-200">
-                    <p className="text-xs text-slate-500 font-medium mb-3">No compressor or cooling units added to this estimate.</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedCatalogCategory('Compressor');
-                        setIsAddMaterialModalOpen(true);
-                      }}
-                      className="btn-3d px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1.5" />
-                      + Add Refrigeration Component
-                    </button>
-                  </div>
-                ) : (
                   <div className="w-full overflow-x-auto rounded-xl border border-slate-200/90 shadow-2xs">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
                           <th className="py-2.5 px-3 text-left">Component</th>
-                          <th className="py-2.5 px-3 w-44 text-center">Specification / Rating</th>
                           <th className="py-2.5 px-3 w-28 text-center">Quantity</th>
                           <th className="py-2.5 px-3 w-36 text-center">Price (₹)</th>
                           <th className="py-2.5 px-3 text-right w-36">Total Price</th>
@@ -1815,7 +1988,6 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                         {compressor.map((row, idx) => {
                           const totalPrice = calculatePurchasedItemPrice(row.quantity, row.price);
                           const totalPriceDisplay = totalPrice !== null ? formatPurchasedPrice(totalPrice) : '—';
-                          const opts = Array.isArray(row.dropdownOptions) && row.dropdownOptions.length > 0 ? row.dropdownOptions : null;
 
                           return (
                             <tr key={row.id || idx} className="hover:bg-rose-50/30 transition-colors">
@@ -1825,23 +1997,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   placeholder="Component Name"
                                   value={row.material || ''}
                                   onChange={(e) => updateCompressorRow(idx, 'material', e.target.value)}
-                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20 focus:outline-none text-xs font-semibold"
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-rose-500 focus:outline-none text-xs font-semibold"
                                 />
-                              </td>
-                              <td className="py-2 px-3 text-center">
-                                {opts && opts.length > 0 ? (
-                                  <select
-                                    value={row.size || opts[0]}
-                                    onChange={(e) => updateCompressorRow(idx, 'size', e.target.value)}
-                                    className="w-full bg-rose-50/80 text-rose-950 px-2 py-1.5 rounded-lg border border-rose-300 focus:border-rose-500 focus:outline-none text-xs font-bold shadow-2xs"
-                                  >
-                                    {opts.map(s => (
-                                      <option key={s} value={s}>{s}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <span className="text-[11px] text-slate-400 font-medium">—</span>
-                                )}
                               </td>
                               <td className="py-2 px-3 text-center">
                                 <input
@@ -1869,20 +2026,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 {totalPriceDisplay}
                               </td>
                               <td className="py-2 px-2 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {(row.allowMultiple || (opts && opts.length > 0)) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAddRepeatableCompressorItem(row)}
-                                      className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                      title={`+ Add Another ${row.material || 'Component'}`}
-                                    >
-                                      <PlusCircle className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                <div className="flex items-center justify-center gap-1">
                                   <button
+                                    type="button"
+                                    onClick={() => handleAddMoreCompressorRow(idx)}
+                                    className="p-1 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="+ Add More directly below this row"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => deleteCompressorRow(idx)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                     title="Remove Row"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1895,38 +2051,25 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
-
-              {/* ========================================================================= */}
-              {/* 3D STRUCTURE PREVIEW (PARAMETRIC INTERACTIVE MODEL) */}
-              {/* ========================================================================= */}
-              <Counter3DPreview
-                counterType={clientData.counterType}
-                counterSubtype={clientData.counterSubtype}
-                sheets={sheets}
-                pipes={pipes}
-                angles={angles}
-                purchased={purchased}
-                compressor={compressor}
-              />
+                </div>
+              )}
             </>
           )}
 
-          {/* Stepper Navigation */}
+          {/* Stepper Navigation to Step 3 */}
           <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-8">
             <button
               onClick={() => setCurrentStep(1)}
-              className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2"
+              className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Client Data
             </button>
             <button
               onClick={() => setCurrentStep(3)}
-              className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20"
+              className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
             >
-              Proceed to Weight & Pricing Summary
+              Proceed to Weight Summary
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -1934,281 +2077,497 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       )}
 
       {/* ========================================================================= */}
-      {/* STEP 3: WEIGHT BREAKDOWN & PRICING SUMMARY (VIOLET / SLATE THEME) */}
+      {/* STEP 3 — WEIGHT SUMMARY & INTERNAL COST */}
       {/* ========================================================================= */}
       {currentStep === 3 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Weight Summary & Cost Inputs */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="card-3d p-6 lg:p-7 border-violet-200/80">
-              <div className="flex items-center gap-2.5 mb-5 pb-3 border-b border-slate-100">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="card-3d p-6 lg:p-8 border-violet-200/80 bg-white">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
                 <div className="w-3 h-3 rounded-full bg-violet-600 animate-pulse shadow-xs" />
                 <h2 className="text-base font-black text-slate-900 tracking-tight">
-                  Weight Summary
+                  Step 3 – Weight Summary & Labour Cost
                 </h2>
               </div>
+              <span className="text-[11px] font-mono font-bold bg-violet-50 text-violet-900 border border-violet-200 px-3 py-1 rounded-lg">
+                Estimate: {clientData.estimateNumber}
+              </span>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {/* Counter Type */}
-                <div className="card-3d-interactive p-4 bg-linear-to-b from-white to-slate-50/50 border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Counter Type</span>
-                  <span className="text-sm font-black text-slate-900 block">
-                    {clientData.counterType || '—'}
-                    {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
-                  </span>
-                  <span className="text-[10px] text-emerald-700 font-bold block mt-1">Commercial Kitchen Equipment</span>
-                </div>
+            {/* Counter Type Banner */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Selected Equipment
+                </span>
+                <span className="text-sm font-black text-slate-900 block mt-0.5">
+                  {clientData.counterType || 'Working Table'}
+                  {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
+                </span>
+              </div>
+              <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 self-start sm:self-auto">
+                Commercial Kitchen Fabrication
+              </span>
+            </div>
 
-                {/* Grand Total Material Weight (Amber / Orange 3D Card) */}
-                <div className="card-3d-interactive p-4 bg-linear-to-b from-white via-amber-50/30 to-amber-100/20 border-amber-300">
-                  <span className="text-[11px] font-black text-amber-900 uppercase tracking-wider block mb-1">
-                    Grand Total Material Weight
+            {/* ========================================================================= */}
+            {/* 1. COMMON GRAND TOTAL MATERIAL WEIGHT SECTION */}
+            {/* ========================================================================= */}
+            <div className="p-6 rounded-2xl bg-linear-to-b from-amber-500 to-amber-600 text-white shadow-md shadow-amber-600/20 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[11px] font-black text-amber-100 uppercase tracking-widest block">
+                    GRAND TOTAL MATERIAL WEIGHT
                   </span>
-                  <div className="text-2xl font-black text-amber-700 tracking-tight">
-                    {calculation.totalWeight > 0 ? `${calculation.totalWeight.toFixed(2)}` : '0.00'} <span className="text-sm font-bold text-amber-900/60">kg</span>
+                  <div className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight mt-1">
+                    {calculation.totalWeight.toFixed(2)} <span className="text-lg font-bold text-amber-200">kg</span>
                   </div>
-                  <span className="text-[10px] text-amber-800 font-bold block mt-0.5">Calculated from sheet, pipe & angle specifications</span>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[10px] text-amber-100/90 font-medium block">Combined Fabrication Material Weight</span>
+                  <span className="text-xs text-white font-bold bg-amber-700/60 px-3 py-1 rounded-full border border-amber-400/40 inline-block mt-1">
+                    All Sheet &amp; Pipe Materials Included
+                  </span>
                 </div>
               </div>
 
-              {/* Estimate Cost Summary Inputs */}
-              <div className="border-t border-slate-100 pt-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2 h-2 rounded-full bg-violet-500" />
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                    Estimate Cost Summary
-                  </h3>
-                </div>
+              {/* Constituent breakdown underneath */}
+              <div className="pt-3.5 mt-3.5 border-t border-amber-400/40 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-amber-100 font-medium">
+                <span>Sheet: <strong className="text-white font-black">{calculation.totalSheetWeight.toFixed(2)} kg</strong> ({sheets.length} components)</span>
+                <span>+</span>
+                <span>Pipe: <strong className="text-white font-black">{calculation.totalPipeWeight.toFixed(2)} kg</strong> ({pipes.length} components)</span>
+                {calculation.totalAngleWeight > 0 && (
+                  <>
+                    <span>+</span>
+                    <span>Angle: <strong className="text-white font-black">{calculation.totalAngleWeight.toFixed(2)} kg</strong> ({angles.length} components)</span>
+                  </>
+                )}
+                <span>=</span>
+                <span className="text-white font-black bg-amber-700/90 px-2 py-0.5 rounded font-mono">{calculation.totalWeight.toFixed(2)} kg</span>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Material Rate */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Material Rate (₹/kg)
+            {/* ========================================================================= */}
+            {/* 2. MATERIAL & LABOUR COST SECTION */}
+            {/* ========================================================================= */}
+            <div className="border-t border-slate-100 pt-6 space-y-4 mb-6">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-violet-500" />
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Cost
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Material Rate (₹/kg) & Material Cost */}
+                <div className="p-4 rounded-xl bg-teal-50/50 border border-teal-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-teal-900 uppercase tracking-wider">
+                      MATERIAL RATE (₹/kg)
                     </label>
+                    <span className="text-[10px] text-teal-700 font-bold bg-white px-2 py-0.5 rounded border border-teal-200">
+                      Per kg
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-teal-600">₹</span>
                     <input
                       type="number"
                       min="0"
                       step="any"
-                      placeholder="e.g. 250"
+                      placeholder=""
                       value={pricingInputs.materialRate}
-                      onChange={(e) => setPricingInputs({ ...pricingInputs, materialRate: sanitizeNumericInput(e.target.value) })}
-                      className="w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15 focus:outline-none text-xs font-bold text-right transition-all"
+                      onChange={(e) => {
+                        const val = sanitizeNumericInput(e.target.value);
+                        setPricingInputs({ ...pricingInputs, materialRate: val, sheetRate: val, pipeRate: val });
+                      }}
+                      className="w-full bg-white text-slate-900 px-3 py-2 rounded-lg border border-teal-300 focus:border-teal-500 focus:outline-none text-xs font-bold text-right shadow-2xs"
                     />
                   </div>
-
-                  {/* Labour Cost */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Labour Cost (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 1500"
-                      value={pricingInputs.labourCost}
-                      onChange={(e) => setPricingInputs({ ...pricingInputs, labourCost: sanitizeNumericInput(e.target.value) })}
-                      className="w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15 focus:outline-none text-xs font-bold text-right transition-all"
-                    />
-                  </div>
-
-                  {/* GST (%) */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      GST (%)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="any"
-                      placeholder="18"
-                      value={pricingInputs.gst}
-                      onChange={(e) => setPricingInputs({ ...pricingInputs, gst: sanitizeNumericInput(e.target.value) })}
-                      className="w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15 focus:outline-none text-xs font-bold text-right transition-all"
-                    />
-                  </div>
-
-                  {/* Discount (₹) */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Discount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 500"
-                      value={pricingInputs.discount}
-                      onChange={(e) => setPricingInputs({ ...pricingInputs, discount: sanitizeNumericInput(e.target.value) })}
-                      className="w-full bg-slate-50/50 hover:bg-white focus:bg-white text-slate-900 placeholder-slate-400 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15 focus:outline-none text-xs font-bold text-right transition-all"
-                    />
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-teal-200 font-semibold text-teal-900">
+                    <span>MATERIAL COST:</span>
+                    <span className="text-teal-950 font-black font-mono text-sm">{formatCurrency(calculation.materialCost)}</span>
                   </div>
                 </div>
 
-                {/* Back to Step 2 Navigation */}
-                <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-start">
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2 cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Material Specification
-                  </button>
+                {/* Labour Rate (₹/kg) & Labour Cost */}
+                <div className="p-4 rounded-xl bg-violet-50/50 border border-violet-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-violet-900 uppercase tracking-wider">
+                      LABOUR RATE (₹/kg)
+                    </label>
+                    <span className="text-[10px] text-violet-700 font-bold bg-white px-2 py-0.5 rounded border border-violet-200">
+                      Per kg
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-violet-600">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder=""
+                      value={pricingInputs.labourRate}
+                      onChange={(e) => setPricingInputs({ ...pricingInputs, labourRate: sanitizeNumericInput(e.target.value) })}
+                      className="w-full bg-white text-slate-900 px-3 py-2 rounded-lg border border-violet-300 focus:border-violet-500 focus:outline-none text-xs font-bold text-right shadow-2xs"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-violet-200 font-semibold text-violet-900">
+                    <span>LABOUR COST:</span>
+                    <span className="text-violet-950 font-black font-mono text-sm">{formatCurrency(calculation.labourCost)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Purchased & Components Cost Summary */}
+              {calculation.purchasedItemCost > 0 && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-200 flex items-center justify-between text-xs">
+                  <span className="text-indigo-900 font-bold">PURCHASED &amp; HARDWARE ITEMS COST:</span>
+                  <span className="text-indigo-950 font-black font-mono text-sm">{formatCurrency(calculation.purchasedItemCost)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* ========================================================================= */}
+            {/* 3. TOTAL SECTION (INTERNAL COST, SELLING % & UNIT SELLING PRICE) */}
+            {/* ========================================================================= */}
+            <div className="border-t border-slate-100 pt-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Total
+                </h3>
+              </div>
+
+              {/* Grand Total Internal Cost */}
+              <div className="p-4 rounded-xl bg-linear-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
+                    GRAND TOTAL INTERNAL COST
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">Material Cost + Labour Cost + Purchased Items</span>
+                </div>
+                <div className="text-xl font-black text-white font-mono">
+                  {formatCurrency(calculation.subtotal)}
+                </div>
+              </div>
+
+              {/* Selling Percentage Card */}
+              <div className="p-5 rounded-2xl bg-linear-to-b from-emerald-50/90 to-teal-50/50 border border-emerald-300 space-y-4 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
+                    <label className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                      Selling Percentage (%)
+                    </label>
+                  </div>
+                  <span className="text-[10px] text-emerald-800 font-bold bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
+                    Live Markup
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="0"
+                    value={pricingInputs.sellingPercentage}
+                    onChange={(e) => setPricingInputs({ ...pricingInputs, sellingPercentage: sanitizeNumericInput(e.target.value) })}
+                    className="w-full bg-white text-slate-900 px-4 py-2.5 rounded-xl border border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm font-black text-right shadow-2xs"
+                  />
+                  <span className="text-base font-black text-emerald-950">%</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-emerald-200/80">
+                  <div className="p-3.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between shadow-2xs">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">Selling Amount</span>
+                    </div>
+                    <span className="text-sm font-black text-emerald-900 font-mono">
+                      {formatCurrency(calculation.sellingAmount || 0)}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-emerald-600 text-white flex items-center justify-between shadow-xs">
+                    <div>
+                      <span className="text-[11px] font-black text-emerald-100 uppercase tracking-wider block">Selling Price / Unit</span>
+                    </div>
+                    <span className="text-base font-black text-white font-mono">
+                      {formatCurrency(calculation.unitSellingPrice)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Dynamic Quotation / Bill Items Breakdown Table */}
-            <div className="card-3d p-6 lg:p-7 border-slate-200/90 bg-white">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Quotation / Bill Items Breakdown
-                    </h3>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      Dynamically rendered for Estimate: <strong className="text-slate-800 font-mono">{clientData.estimateNumber}</strong>
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
-                  {quotationBillItems.length} Line Item(s)
+            {/* Step 3 Bottom Navigation Buttons */}
+            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Material Specification
+              </button>
+
+              <button
+                onClick={() => setCurrentStep(4)}
+                className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
+              >
+                Continue to Selling Price & Final Estimate
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* STEP 4 — SELLING PRICE & BILL */}
+      {/* ========================================================================= */}
+      {currentStep === 4 && (
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* SECTION 1 – SELLING PRICE & FINANCIAL ADJUSTMENTS */}
+          <div className="card-3d p-6 border-slate-200/90 bg-white">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-2xs" />
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Step 4 – Selling Price & Bill Finalization
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded border border-slate-200">
+                {clientData.estimateNumber}
+              </span>
+            </div>
+
+            {/* 4-Box Primary Selling Price Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Box 1: Counter Name */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Counter Name
                 </span>
+                <span className="text-sm font-black text-slate-900 block">
+                  {clientData.counterType || 'Working Table'}
+                  {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium mt-1">Stainless Steel Commercial Unit</span>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
-                      <th className="py-2.5 px-3 text-center w-14">Sr. No.</th>
-                      <th className="py-2.5 px-3">Particulars & Description</th>
-                      <th className="py-2.5 px-3 text-center w-20">Qty</th>
-                      <th className="py-2.5 px-3 text-right w-32">Rate (₹)</th>
-                      <th className="py-2.5 px-3 text-right w-36">Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
-                    {quotationBillItems.map((item) => (
-                      <tr key={item.srNo} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-500">
-                          {item.srNo}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className="font-bold text-slate-900 block">{item.particulars}</span>
-                          {item.spec && (
-                            <span className="text-[11px] text-slate-500 block mt-0.5">{item.spec}</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-bold font-mono">
-                          {item.quantity}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-700">
-                          {formatCurrency(item.rate)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-black font-mono text-slate-900">
-                          {formatCurrency(item.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Box 2: Counter Quantity Input (Editable in Step 4) */}
+              <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-black text-blue-900 uppercase tracking-wider">
+                    Quantity
+                  </label>
+                  <span className="text-[10px] text-blue-700 font-bold">Units</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="1"
+                  value={clientData.counterQuantity || '1'}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, '');
+                    const parsed = parseInt(raw, 10);
+                    const safeVal = isNaN(parsed) || parsed < 1 ? '' : String(parsed);
+                    setClientData({ ...clientData, counterQuantity: safeVal });
+                  }}
+                  onBlur={() => {
+                    if (!clientData.counterQuantity || parseInt(clientData.counterQuantity, 10) < 1) {
+                      setClientData({ ...clientData, counterQuantity: '1' });
+                    }
+                  }}
+                  className="w-full bg-white text-slate-900 px-3 py-1.5 rounded-lg border border-blue-300 focus:border-blue-500 focus:outline-none text-base font-black text-center shadow-2xs"
+                />
+                <span className="text-[10px] text-blue-600 font-medium text-center mt-1">Quantity of counters</span>
+              </div>
+
+              {/* Box 3: Selling Price per Unit */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Selling Price / Unit
+                </span>
+                <div className="text-lg font-black text-slate-800 font-mono">
+                  {formatCurrency(calculation.unitSellingPrice)}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium mt-1">Single counter unit price</span>
+              </div>
+
+              {/* Box 4: Total Selling Price */}
+              <div className="p-4 rounded-xl bg-linear-to-b from-blue-50 to-indigo-50/60 border border-blue-300 flex flex-col justify-between">
+                <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block mb-1">
+                  Total Selling Price
+                </span>
+                <div className="text-lg font-black text-blue-800 font-mono tracking-tight">
+                  {formatCurrency(calculation.totalSellingPrice)}
+                </div>
+                <span className="text-[10px] text-blue-600 font-medium mt-1">
+                  {formatCurrency(calculation.unitSellingPrice)} × {calculation.counterQuantity}
+                </span>
+              </div>
+            </div>
+
+            {/* Financial Adjustments Grid: GST, Discount, Grand Total */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {/* GST (%) Input & GST Amount */}
+              <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                    GST (%)
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-bold">Tax</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="0"
+                    value={pricingInputs.gst}
+                    onChange={(e) => setPricingInputs({ ...pricingInputs, gst: sanitizeNumericInput(e.target.value) })}
+                    className="w-full bg-white text-slate-900 px-3 py-2 rounded-lg border border-amber-300 focus:border-amber-500 focus:outline-none text-xs font-bold text-right shadow-2xs"
+                  />
+                  <span className="text-xs font-bold text-amber-900">%</span>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-200/60 font-semibold text-amber-900">
+                  <span>GST Amount:</span>
+                  <span className="font-black font-mono">{formatCurrency(calculation.gstAmount)}</span>
+                </div>
+              </div>
+
+              {/* Discount (₹) Input */}
+              <div className="p-4 rounded-xl bg-rose-50/60 border border-rose-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-rose-900 uppercase tracking-wider">
+                    Discount (₹)
+                  </label>
+                  <span className="text-[10px] text-rose-800 font-bold">Manual</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-rose-600">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="0"
+                    value={pricingInputs.discount}
+                    onChange={(e) => setPricingInputs({ ...pricingInputs, discount: sanitizeNumericInput(e.target.value) })}
+                    className="w-full bg-white text-slate-900 px-3 py-2 rounded-lg border border-rose-300 focus:border-rose-500 focus:outline-none text-xs font-bold text-right shadow-2xs"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-rose-200/60 font-semibold text-rose-900">
+                  <span>Applied Discount:</span>
+                  <span className="font-black font-mono">{formatCurrency(calculation.discount)}</span>
+                </div>
+              </div>
+
+              {/* Grand Total Hero Box */}
+              <div className="p-5 rounded-2xl bg-linear-to-r from-emerald-600 to-teal-700 text-white flex flex-col justify-between shadow-md shadow-emerald-700/20">
+                <div>
+                  <span className="text-[11px] font-black text-emerald-100 uppercase tracking-widest block mb-0.5">
+                    Grand Total
+                  </span>
+                  <span className="text-[10px] text-emerald-200 font-medium">Final customer billing amount</span>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight mt-2">
+                  {formatCurrency(calculation.finalTotal)}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: 3D Pricing Summary & Grand Total */}
-          <div className="space-y-6">
-            <div className="card-3d p-6 lg:p-7 sticky top-8 shadow-md">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Pricing Summary
-              </h3>
-
-              <div className="space-y-3">
-                {/* Material Cost */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-slate-600 font-semibold">Material Cost</span>
-                  <span className="text-xs font-black text-slate-900">
-                    {formatCurrency(calculation.materialCost)}
-                  </span>
+          {/* SECTION 2 – BILL PREVIEW */}
+          <div className="card-3d p-6 border-slate-200/90 bg-white">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  <FileText className="w-4 h-4 text-emerald-400" />
                 </div>
-
-                {/* Purchased Item & Compressor Cost */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-slate-600 font-semibold">Purchased & Components Cost</span>
-                  <span className="text-xs font-black text-slate-900">
-                    {formatCurrency(calculation.purchasedItemCost)}
-                  </span>
-                </div>
-
-                {/* Labour Cost */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-slate-600 font-semibold">Labour Cost</span>
-                  <span className="text-xs font-black text-slate-900">
-                    {formatCurrency(calculation.labourCost)}
-                  </span>
-                </div>
-
-                {/* Discount */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-rose-50/60 border border-rose-100">
-                  <span className="text-rose-700 font-semibold">Discount</span>
-                  <span className="text-xs font-black text-rose-700">
-                    {calculation.discount > 0 ? `- ${formatCurrency(calculation.discount)}` : formatCurrency(0)}
-                  </span>
-                </div>
-
-                {/* GST */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-slate-600 font-semibold">GST</span>
-                  <span className="text-xs font-black text-slate-900">
-                    {formatCurrency(calculation.gstAmount)}
-                  </span>
-                </div>
-
-                {/* Grand Total 3D Hero Card */}
-                <div className="p-5 rounded-2xl bg-linear-to-b from-slate-900 to-slate-800 text-white shadow-lg shadow-slate-900/25 border border-slate-700 mt-3">
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
-                    Grand Total Estimate
-                  </span>
-                  <span className="text-2xl font-black text-white block mt-1 tracking-tight">
-                    {formatCurrency(calculation.grandTotal)}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-1 italic">
-                    Includes Material, Components, Labour & GST
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Customer Bill Preview
+                  </h3>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Generated for {clientData.customerName || 'Customer'}
                   </span>
                 </div>
               </div>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                {quotationBillItems.length} Item(s)
+              </span>
+            </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2.5 pt-5 border-t border-slate-100 mt-5">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs mb-6">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
+                    <th className="py-2.5 px-3 text-center w-16">Sr. No.</th>
+                    <th className="py-2.5 px-3">Counter Name</th>
+                    <th className="py-2.5 px-3 text-center w-24">Qty</th>
+                    <th className="py-2.5 px-3 text-right w-40">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
+                  {quotationBillItems.map((item) => (
+                    <tr key={item.srNo} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 px-3 text-center font-bold text-slate-500">
+                        {item.srNo}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-900 text-xs">{item.counterName}</span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-black font-mono text-slate-800">
+                        {item.quantity}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black font-mono text-slate-900 text-xs">
+                        {formatCurrency(item.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-900 text-white font-bold text-xs border-t-2 border-slate-900">
+                    <td colSpan={3} className="py-3 px-3 text-right uppercase tracking-wider font-black">
+                      TOTAL
+                    </td>
+                    <td className="py-3 px-3 text-right font-black font-mono text-sm text-emerald-400">
+                      {formatCurrency(calculation.finalTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Action Buttons: Generate Bill & Save Estimate */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setCurrentStep(3)}
+                className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Weight Summary
+              </button>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
                 <button
                   onClick={handleGeneratePDF}
-                  className="btn-3d w-full py-2.5 text-xs bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20 border border-slate-700 cursor-pointer"
+                  className="btn-3d px-6 py-2.5 text-xs bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20 border border-slate-700 cursor-pointer flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                 >
-                  <Download className="w-4 h-4 mr-1.5 text-emerald-400" />
-                  Generate Quotation PDF
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  Generate Bill
                 </button>
 
                 <button
                   onClick={handleSaveProject}
                   disabled={loading}
-                  className="btn-3d btn-3d-emerald w-full py-2.5 text-xs shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
+                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
-                  {projectToEdit ? 'Update Project' : 'Save Project'}
-                </button>
-
-                <button
-                  onClick={handlePrintQuotation}
-                  className="btn-3d btn-3d-slate w-full py-2 text-xs cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                  Print Quotation
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {projectToEdit ? 'Update Estimate' : 'Save Estimate'}
                 </button>
               </div>
             </div>
@@ -2291,8 +2650,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       key={cat}
                       onClick={() => setSelectedCatalogCategory(cat)}
                       className={`px-2 py-0.5 rounded font-bold cursor-pointer ${selectedCatalogCategory === cat
-                          ? 'bg-slate-800 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       {cat}
@@ -2318,10 +2677,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     >
                       <div className="flex items-center gap-2.5">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${mat.category === 'Sheet' ? 'bg-emerald-600' :
-                            mat.category === 'Pipe' ? 'bg-cyan-600' :
-                              mat.category === 'Angle' ? 'bg-indigo-600' :
-                                (mat.category === 'Compressor' || mat.category === 'Special') ? 'bg-purple-600' :
-                                  'bg-amber-500'
+                          mat.category === 'Pipe' ? 'bg-cyan-600' :
+                            mat.category === 'Angle' ? 'bg-indigo-600' :
+                              (mat.category === 'Compressor' || mat.category === 'Special') ? 'bg-purple-600' :
+                                'bg-amber-500'
                           }`}></div>
                         <div>
                           <span className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 block">

@@ -409,19 +409,49 @@ export default function ProjectsList({ onEditProject, setActiveTab }) {
               </div>
 
               {/* Weight and Pricing Overview */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="card-3d-interactive p-4 bg-amber-50/40 border-amber-200">
-                  <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block mb-1">Total Material Weight</span>
-                  <span className="text-xl font-black text-amber-700">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="card-3d-interactive p-3.5 bg-amber-50/40 border-amber-200">
+                  <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block mb-0.5">Total Material Weight</span>
+                  <span className="text-lg font-black text-amber-700">
                     {(Number(selectedProject.totalMaterialWeight) || 0).toFixed(2)} kg
                   </span>
                 </div>
-                <div className="card-3d-interactive p-4 bg-emerald-50/50 border-emerald-200">
-                  <span className="text-[10px] font-black text-emerald-900 uppercase tracking-wider block mb-1">Grand Total Estimate</span>
-                  <span className="text-xl font-black text-emerald-700">
-                    {formatCurrency(selectedProject.totalAmount || selectedProject.grandTotal)}
+                <div className="card-3d-interactive p-3.5 bg-emerald-50/50 border-emerald-200">
+                  <span className="text-[10px] font-black text-emerald-900 uppercase tracking-wider block mb-0.5">Final Total Estimate</span>
+                  <span className="text-lg font-black text-emerald-700">
+                    {formatCurrency(selectedProject.finalTotal || selectedProject.totalAmount || selectedProject.grandTotal)}
                   </span>
                 </div>
+              </div>
+
+              {/* Cost Summary Breakdown Table */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Material Cost:</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(selectedProject.materialCost)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Labour Cost:</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(selectedProject.labourCost)}</span>
+                </div>
+                {selectedProject.sellingPrice > 0 && (
+                  <div className="flex justify-between text-emerald-800 font-semibold">
+                    <span>Selling Price (+{selectedProject.sellingPercentage || 0}%):</span>
+                    <span className="font-bold">{formatCurrency(selectedProject.sellingPrice)}</span>
+                  </div>
+                )}
+                {selectedProject.gstAmount > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>GST ({selectedProject.gst || 18}%):</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(selectedProject.gstAmount)}</span>
+                  </div>
+                )}
+                {selectedProject.discount > 0 && (
+                  <div className="flex justify-between text-rose-700 font-semibold">
+                    <span>Discount:</span>
+                    <span className="font-bold">- {formatCurrency(selectedProject.discount)}</span>
+                  </div>
+                )}
               </div>
             </div>
 

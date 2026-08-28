@@ -12,11 +12,16 @@ import {
 } from './constants.js';
 
 /**
- * Universal Sheet Weight Calculation (Workshop kg-per-square-foot method)
+ * Universal Sheet Weight Calculation (Workshop kg-per-square-foot method benchmarked to 32 sq.ft)
  * 
  * Formula:
  * 1. Area in square feet: Area = (Length in inches × Width in inches) / 144
- * 2. Weight = Area × WeightPerSqFt(gauge) × Quantity
+ * 2. Weight per sq.ft = Reference Weight / 32
+ *    - 1.3 mm: 39 kg / 32 = 1.21875 kg/sq.ft
+ *    - 1.2 mm: 31 kg / 32 = 0.96875 kg/sq.ft
+ *    - 1.0 mm: 25.5 kg / 32 = 0.796875 kg/sq.ft
+ *    - 0.8 mm: 20 kg / 32 = 0.625 kg/sq.ft
+ * 3. Total Weight = Area in sq.ft × Weight per sq.ft × Quantity
  * 
  * @param {Object|number|string} arg1 - Options object or length in inches
  * @param {number|string} [arg2] - Width in inches
@@ -28,16 +33,23 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
   let l, w, g, q;
 
   if (typeof arg1 === 'object' && arg1 !== null) {
-    if (arg1.length === '' || arg1.length === null || arg1.length === undefined ||
-        arg1.width === '' || arg1.width === null || arg1.width === undefined ||
-        arg1.gauge === '' || arg1.gauge === null || arg1.gauge === undefined ||
-        arg1.quantity === '' || arg1.quantity === null || arg1.quantity === undefined) {
+    const rawLength = arg1.length;
+    const rawWidthOrHeight = (arg1.width !== undefined && arg1.width !== null && arg1.width !== '') 
+      ? arg1.width 
+      : arg1.height;
+    const rawGauge = arg1.gauge;
+    const rawQty = arg1.quantity;
+
+    if (rawLength === '' || rawLength === null || rawLength === undefined ||
+        rawWidthOrHeight === '' || rawWidthOrHeight === null || rawWidthOrHeight === undefined ||
+        rawGauge === '' || rawGauge === null || rawGauge === undefined ||
+        rawQty === '' || rawQty === null || rawQty === undefined) {
       return 0;
     }
-    l = parseFloat(arg1.length);
-    w = parseFloat(arg1.width);
-    g = parseFloat(arg1.gauge);
-    q = parseFloat(arg1.quantity);
+    l = parseFloat(rawLength);
+    w = parseFloat(rawWidthOrHeight);
+    g = parseFloat(rawGauge);
+    q = parseFloat(rawQty);
   } else {
     if (arg1 === '' || arg1 === null || arg1 === undefined ||
         arg2 === '' || arg2 === null || arg2 === undefined ||
@@ -55,7 +67,14 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
     return 0;
   }
 
-  const areaSqFt = (l * w) / 144;
+  let areaSqFt;
+  if (typeof arg1 === 'object' && arg1 !== null && arg1.depth && !isNaN(parseFloat(arg1.depth)) && parseFloat(arg1.depth) > 0) {
+    const d = parseFloat(arg1.depth);
+    areaSqFt = (l * w + 2 * (l + w) * d) / 144;
+  } else {
+    areaSqFt = (l * w) / 144;
+  }
+
   const weightPerSqFt = getGaugeWeightPerSqFt(g);
 
   return areaSqFt * weightPerSqFt * q;
@@ -66,23 +85,26 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
  * 
  * Formula:
  * Weight = Length (ft) × WeightPerFoot(Pipe Gauge) × Quantity
+ * If unit is inch, Length in ft = Length / 12
  * 
- * @param {Object|number|string} arg1 - Options object or length in ft
- * @param {string} [arg2] - Pipe size description / ID
+ * @param {Object|number|string} arg1 - Options object or length in ft/inch
+ * @param {string} [arg2] - Pipe size description / ID / Pipe Gauge
  * @param {number|string} [arg3] - Quantity
  * @returns {number} Calculated weight in kg (floating point)
  */
 export function calculatePipeWeight(arg1, arg2, arg3) {
-  let l, pipeSize, q;
+  let l, pipeSize, pipeGauge, q, unit;
 
   if (typeof arg1 === 'object' && arg1 !== null) {
     if (arg1.length === '' || arg1.length === null || arg1.length === undefined ||
-        (!arg1.pipeSize && !arg1.gauge) ||
+        (!arg1.pipeSize && !arg1.pipeGauge && !arg1.gauge) ||
         arg1.quantity === '' || arg1.quantity === null || arg1.quantity === undefined) {
       return 0;
     }
     l = parseFloat(arg1.length);
-    pipeSize = arg1.pipeSize || arg1.gauge || arg1.size || '';
+    unit = (arg1.unit || 'ft').toLowerCase().trim();
+    pipeSize = arg1.pipeSize || '1.5" (38 × 38 mm)';
+    pipeGauge = arg1.pipeGauge || arg1.gauge || '';
     q = parseFloat(arg1.quantity);
   } else {
     if (arg1 === '' || arg1 === null || arg1 === undefined ||
@@ -91,16 +113,21 @@ export function calculatePipeWeight(arg1, arg2, arg3) {
       return 0;
     }
     l = parseFloat(arg1);
-    pipeSize = arg2 || '';
+    unit = 'ft';
+    pipeSize = arg2 || '1.5" (38 × 38 mm)';
+    pipeGauge = arg2 || '';
     q = parseFloat(arg3);
   }
 
-  if (isNaN(l) || isNaN(q) || l <= 0 || q <= 0 || !pipeSize) {
+  if (isNaN(l) || isNaN(q) || l <= 0 || q <= 0) {
     return 0;
   }
 
-  const weightPerFt = getPipeWeightPerFoot(pipeSize);
-  return l * weightPerFt * q;
+  // Convert inch to feet if unit is inch (1 ft = 12 inches)
+  const lengthInFeet = (unit === 'inch' || unit === 'in') ? (l / 12) : l;
+
+  const weightPerFt = getPipeWeightPerFoot(pipeSize, pipeGauge);
+  return lengthInFeet * weightPerFt * q;
 }
 
 /**
@@ -124,7 +151,7 @@ export function calculateAngleWeight(arg1, arg2, arg3) {
       return 0;
     }
     l = parseFloat(arg1.length);
-    gauge = arg1.gauge || arg1.size || '';
+    gauge = arg1.gauge || arg1.size || '25 × 3 mm';
     q = parseFloat(arg1.quantity);
   } else {
     if (arg1 === '' || arg1 === null || arg1 === undefined ||
@@ -133,7 +160,7 @@ export function calculateAngleWeight(arg1, arg2, arg3) {
       return 0;
     }
     l = parseFloat(arg1);
-    gauge = arg2 || '';
+    gauge = arg2 || '25 × 3 mm';
     q = parseFloat(arg3);
   }
 
@@ -150,10 +177,6 @@ export function calculateAngleWeight(arg1, arg2, arg3) {
  * 
  * Formula: Total Price = Quantity × Price
  * Returns null if either Quantity or Price is empty/invalid/<=0.
- * 
- * @param {Object|number|string} arg1 - Options object or quantity
- * @param {number|string} [arg2] - Price in ₹
- * @returns {number|null} Calculated total price in ₹ (rounded to 2 decimals) or null
  */
 export function calculatePurchasedItemPrice(arg1, arg2) {
   let q, p;
@@ -183,19 +206,7 @@ export function calculatePurchasedItemPrice(arg1, arg2) {
 }
 
 /**
- * Universal Purchased Item Weight Calculation (Legacy backward compatibility)
- */
-export function calculatePurchasedItemWeight() {
-  return 0;
-}
-
-/**
  * Universal Row Weight Calculation
- * Determines the calculation type automatically and applies the appropriate formula.
- * Sheet, Pipe, and Angle materials have weight; Purchased items use price instead of weight (return 0).
- * 
- * @param {Object} row - Material specification row
- * @returns {number} Calculated weight in kg (number >= 0)
  */
 export function calculateRowWeight(row) {
   if (!row) return 0;
@@ -206,15 +217,15 @@ export function calculateRowWeight(row) {
     return calculateSheetWeight(row);
   }
 
-  if (type === 'pipe' || (row.pipeSize !== undefined && row.pipeSize !== '')) {
+  if (type === 'pipe' || (row.pipeSize !== undefined && row.pipeSize !== '') || (row.pipeGauge !== undefined && row.pipeGauge !== '')) {
     return calculatePipeWeight(row);
   }
 
-  if (type === 'angle' || (!row.width && row.length && !row.pipeSize && row.gauge)) {
+  if (type === 'angle' || (!row.width && row.length && !row.pipeSize && row.gauge && String(row.gauge).includes('×'))) {
     return calculateAngleWeight(row);
   }
 
-  if (type === 'purchased') {
+  if (type === 'purchased' || type === 'compressor') {
     return 0;
   }
 
@@ -222,38 +233,67 @@ export function calculateRowWeight(row) {
 }
 
 /**
+ * Calculate Total Weight of Sheet Materials
+ * @param {Array} sheets 
+ * @returns {number} Total sheet weight in kg
+ */
+export function calculateSheetTotalWeight(sheets) {
+  if (!Array.isArray(sheets)) return 0;
+  return sheets.reduce((sum, row) => sum + calculateSheetWeight(row), 0);
+}
+
+/**
+ * Calculate Total Weight of Pipe Materials
+ * @param {Array} pipes 
+ * @returns {number} Total pipe weight in kg
+ */
+export function calculatePipeTotalWeight(pipes) {
+  if (!Array.isArray(pipes)) return 0;
+  return pipes.reduce((sum, row) => sum + calculatePipeWeight(row), 0);
+}
+
+/**
+ * Calculate Total Weight of Angle Materials
+ * @param {Array} angles 
+ * @returns {number} Total angle weight in kg
+ */
+export function calculateAngleTotalWeight(angles) {
+  if (!Array.isArray(angles)) return 0;
+  return angles.reduce((sum, row) => sum + calculateAngleWeight(row), 0);
+}
+
+/**
  * Calculate Grand Total Material Weight across sheet, pipe, and angle material rows.
- * 
- * @param {Array|Object} materials - Array of rows OR { sheets: [], pipes: [], angles: [], purchased: [] }
+ * @param {Array|Object} materials - Array of rows OR { sheets: [], pipes: [], angles: [] }
  * @returns {number} Grand Total Material Weight in kg
  */
 export function calculateGrandTotalWeight(materials) {
   if (!materials) return 0;
 
-  let allRows = [];
   if (Array.isArray(materials)) {
-    allRows = materials;
-  } else if (typeof materials === 'object') {
+    return materials.reduce((sum, row) => sum + calculateRowWeight(row), 0);
+  }
+
+  if (typeof materials === 'object') {
     const sheets = Array.isArray(materials.sheets) ? materials.sheets : [];
     const pipes = Array.isArray(materials.pipes) ? materials.pipes : [];
     const angles = Array.isArray(materials.angles) ? materials.angles : [];
-    allRows = [...sheets, ...pipes, ...angles];
+    
+    return calculateSheetTotalWeight(sheets) + calculatePipeTotalWeight(pipes) + calculateAngleTotalWeight(angles);
   }
 
-  return allRows.reduce((sum, row) => sum + calculateRowWeight(row), 0);
+  return 0;
 }
 
 // Alias for backward compatibility
 export const calculateTotalMaterialWeight = calculateGrandTotalWeight;
 
 // -------------------------------------------------------------
-// COMMERCIAL PRICING CALCULATIONS
+// COMMERCIAL PRICING & BILL CALCULATIONS
 // -------------------------------------------------------------
 
 /**
- * Calculate Total Cost of Purchased Items
- * @param {Array} purchasedItems 
- * @returns {number} Total purchased items cost in ₹
+ * Calculate Total Cost of Purchased & Compressor Items
  */
 export function calculatePurchasedTotal(purchasedItems) {
   if (!Array.isArray(purchasedItems)) return 0;
@@ -264,7 +304,7 @@ export function calculatePurchasedTotal(purchasedItems) {
 }
 
 /**
- * Material Cost = (Grand Total Material Weight × Material Rate)
+ * Material Cost = (Total Material Weight × Material Rate)
  */
 export function calculateMaterialCost(totalWeight, materialRate) {
   const w = parseFloat(totalWeight) || 0;
@@ -273,19 +313,17 @@ export function calculateMaterialCost(totalWeight, materialRate) {
 }
 
 /**
- * Calculate Discounted Material Cost (Discount applies ONLY to Material Cost)
- * @param {number|string} materialCost 
- * @param {number|string} discount 
- * @returns {number} Discounted material cost (>= 0)
+ * Labour Cost = Total Material Weight × Labour Rate (₹/kg)
+ * Section 26 Formula: LABOUR COST = TOTAL MATERIAL WEIGHT × LABOUR RATE PER KG
  */
-export function calculateDiscountedMaterialCost(materialCost, discount) {
-  const m = parseFloat(materialCost) || 0;
-  const d = parseFloat(discount) || 0;
-  return Math.max(0, m - d);
+export function calculateLabourCost(totalWeight, labourRatePerKg) {
+  const w = parseFloat(totalWeight) || 0;
+  const r = parseFloat(labourRatePerKg) || 0;
+  return w * r;
 }
 
 /**
- * Subtotal (Legacy backward compatibility: Material Cost + Purchased Cost + Labour)
+ * Subtotal = Material Cost + Labour Cost + Purchased Item Cost
  */
 export function calculateSubtotal(materialCost, labourCost, purchasedCost = 0) {
   const m = parseFloat(materialCost) || 0;
@@ -295,75 +333,95 @@ export function calculateSubtotal(materialCost, labourCost, purchasedCost = 0) {
 }
 
 /**
- * Taxable Amount (Discounted Material Cost + Purchased Item Cost + Labour Cost)
+ * Selling Amount = Subtotal × Selling Percentage / 100
  */
-export function calculateTaxableAmount(discountedMaterialCost, purchasedItemCost, labourCost) {
-  const dm = parseFloat(discountedMaterialCost) || 0;
-  const p = parseFloat(purchasedItemCost) || 0;
-  const l = parseFloat(labourCost) || 0;
-  return Math.max(0, dm + p + l);
+export function calculateSellingAmount(subtotal, sellingPercentage) {
+  const sub = parseFloat(subtotal) || 0;
+  const pct = parseFloat(sellingPercentage) || 0;
+  return (sub * pct) / 100;
 }
 
 /**
- * GST Amount = Combined Taxable Base Amount × GST% / 100
+ * Selling Price = Subtotal + (Subtotal × Selling Percentage / 100)
+ * Section 31 Formula: Selling Price = Subtotal + Selling Amount
  */
-export function calculateGSTAmount(taxableAmount, gstPercent) {
-  const t = parseFloat(taxableAmount) || 0;
+export function calculateSellingPrice(subtotal, sellingPercentage) {
+  const sub = parseFloat(subtotal) || 0;
+  const amt = calculateSellingAmount(sub, sellingPercentage);
+  return sub + amt;
+}
+
+/**
+ * GST Amount = Selling Price × GST% / 100
+ * Section 32 Formula: GST Amount = Selling Price × GST% / 100
+ */
+export function calculateGSTAmount(sellingPrice, gstPercent) {
+  const sp = parseFloat(sellingPrice) || 0;
   const g = parseFloat(gstPercent) || 0;
-  return (t * g) / 100;
+  return (sp * g) / 100;
 }
 
 // Alias for backward compatibility
 export const calculateGST = calculateGSTAmount;
 
 /**
- * Grand Total Estimate = Discounted Material Cost + Purchased Item Cost + Labour Cost + GST Amount
+ * Final Total = Selling Price + GST Amount - Discount
+ * Section 34 Formula: Final Total = Selling Price + GST Amount - Discount
  */
-export function calculateGrandTotalEstimate(discountedMaterialCost, purchasedItemCost, labourCost, gstAmount) {
-  const dm = parseFloat(discountedMaterialCost) || 0;
-  const p = parseFloat(purchasedItemCost) || 0;
-  const l = parseFloat(labourCost) || 0;
+export function calculateFinalTotal(sellingPrice, gstAmount, discount = 0) {
+  const sp = parseFloat(sellingPrice) || 0;
   const g = parseFloat(gstAmount) || 0;
-  return Math.max(0, dm + p + l + g);
+  const d = parseFloat(discount) || 0;
+  return Math.max(0, sp + g - d);
 }
 
 // Alias for backward compatibility
-export const calculateGrandTotal = calculateGrandTotalEstimate;
+export const calculateGrandTotalEstimate = calculateFinalTotal;
+export const calculateGrandTotal = calculateFinalTotal;
 
 /**
  * Master Estimate Calculation Engine
  * 
- * Formula Flow:
- * 1. Grand Total Material Weight = Sum of (Sheet + Pipe + Angle) weights
- * 2. Material Cost = Grand Total Material Weight × Material Rate
- * 3. Purchased Item Cost = Sum of (Purchased Item Quantity × Price)
- * 4. Discounted Material Cost = max(Material Cost - Discount, 0) [Discount applies ONLY to Material Cost]
- * 5. Combined Taxable Base = Discounted Material Cost + Purchased Item Cost + Labour Cost
- * 6. GST Amount = Combined Taxable Base × GST% / 100
- * 7. Grand Total Estimate = Discounted Material Cost + Purchased Item Cost + Labour Cost + GST Amount
+ * Complete Data Flow:
+ * 1. Total Sheet Weight, Total Pipe Weight, Total Angle Weight
+ * 2. Total Material Weight = Sheet + Pipe + Angle weights
+ * 3. Sheet Cost = Total Sheet Weight × Sheet Rate
+ * 4. Pipe Cost = Total Pipe Weight × Pipe Rate
+ * 5. Angle Cost = Total Angle Weight × Angle Rate
+ * 6. Material Cost = Sheet Cost + Pipe Cost (or Total Material Weight × Material Rate)
+ * 7. Labour Cost = Total Material Weight × Labour Rate (₹/kg)
+ * 8. Purchased Items Cost = Sum of (Qty × Price)
+ * 9. Grand Total Internal Cost (Subtotal) = Sheet Cost + Pipe Cost + Angle Cost + Labour Cost + Purchased Items Cost
+ * 10. Selling Amount = Grand Total Internal Cost × Selling Percentage / 100
+ * 11. Selling Price = Grand Total Internal Cost + Selling Amount
+ * 12. GST Amount = Selling Price × GST % / 100
+ * 13. Final Total = Selling Price + GST Amount - Discount
  * 
  * @param {Object} params
- * @param {number|Object|Array} [params.materials] - Material rows or templates
- * @param {number|string} [params.totalMaterialWeight] - Precomputed weight
- * @param {number|string} [params.materialRate=0] - Rate in ₹/kg
- * @param {number|string} [params.labourCost=0] - Labour in ₹
- * @param {number|string} [params.discount=0] - Discount in ₹
- * @param {number|string} [params.gst=18] - GST percentage
  * @returns {Object} Complete calculation breakdown
  */
 export function calculateEstimate({
   materials,
-  sheets,
-  pipes,
-  angles,
-  purchased,
-  compressor,
+  sheets = [],
+  pipes = [],
+  angles = [],
+  purchased = [],
+  compressor = [],
   totalMaterialWeight,
-  materialRate = 0,
+  materialRate = '',
+  sheetRate,
+  pipeRate,
+  angleRate,
+  labourRate = '',
   labourCost = 0,
+  sellingPercentage = 0,
+  counterQuantity = 1,
   discount = 0,
-  gst = DEFAULT_GST_PERCENT
+  gst = ''
 }) {
+  let sheetRows = Array.isArray(sheets) ? sheets : [];
+  let pipeRows = Array.isArray(pipes) ? pipes : [];
+  let angleRows = Array.isArray(angles) ? angles : [];
   let purchasedRows = [];
   
   if (Array.isArray(purchased)) {
@@ -374,18 +432,24 @@ export function calculateEstimate({
   }
   if (materials) {
     if (Array.isArray(materials)) {
+      sheetRows = materials.filter(m => (m.calculationType || m.category || '').toLowerCase() === 'sheet');
+      pipeRows = materials.filter(m => (m.calculationType || m.category || '').toLowerCase() === 'pipe');
+      angleRows = materials.filter(m => (m.calculationType || m.category || '').toLowerCase() === 'angle');
       purchasedRows.push(...materials.filter(m => {
         const cat = (m.calculationType || m.category || '').toLowerCase();
         return cat === 'purchased' || cat === 'compressor' || cat === 'special';
       }));
     } else if (typeof materials === 'object') {
+      if (Array.isArray(materials.sheets)) sheetRows = materials.sheets;
+      if (Array.isArray(materials.pipes)) pipeRows = materials.pipes;
+      if (Array.isArray(materials.angles)) angleRows = materials.angles;
       const pur = Array.isArray(materials.purchased) ? materials.purchased : [];
       const comp = Array.isArray(materials.compressor) ? materials.compressor : [];
       purchasedRows.push(...pur, ...comp);
     }
   }
 
-  // Deduplicate purchasedRows by id if both top-level and materials were passed
+  // Deduplicate purchasedRows by id
   const seenIds = new Set();
   const uniquePurchasedRows = [];
   for (const item of purchasedRows) {
@@ -399,47 +463,105 @@ export function calculateEstimate({
     }
   }
 
+  // 1. Weight Breakdown (STRICTLY ISOLATED)
+  // Sheet Weight: Sheet materials ONLY
+  const totalSheetWeight = calculateSheetTotalWeight(sheetRows);
+  // Pipe Weight: Pipe materials ONLY
+  const totalPipeWeight = calculatePipeTotalWeight(pipeRows);
+  // Angle Weight: Angle materials ONLY
+  const totalAngleWeight = calculateAngleTotalWeight(angleRows);
+  
+  // Grand Total Material Weight = Sheet + Pipe + Angle
   const totalWeight = totalMaterialWeight !== undefined && !isNaN(parseFloat(totalMaterialWeight))
     ? parseFloat(totalMaterialWeight)
-    : calculateGrandTotalWeight(materials || { sheets, pipes, angles });
+    : (totalSheetWeight + totalPipeWeight + totalAngleWeight);
 
-  const rate = parseFloat(materialRate) || 0;
-  const labour = parseFloat(labourCost) || 0;
-  const disc = parseFloat(discount) || 0;
-  const gstPct = gst !== undefined && !isNaN(parseFloat(gst)) ? parseFloat(gst) : DEFAULT_GST_PERCENT;
+  // Derive Rates (User manual input only — NO hardcoded fallback rate)
+  const defaultMatRate = materialRate !== undefined && materialRate !== '' && !isNaN(parseFloat(materialRate))
+    ? parseFloat(materialRate)
+    : 0;
+  const sRate = sheetRate !== undefined && sheetRate !== '' && !isNaN(parseFloat(sheetRate)) ? parseFloat(sheetRate) : defaultMatRate;
+  const pRate = pipeRate !== undefined && pipeRate !== '' && !isNaN(parseFloat(pipeRate)) ? parseFloat(pipeRate) : defaultMatRate;
+  const aRate = angleRate !== undefined && angleRate !== '' && !isNaN(parseFloat(angleRate)) ? parseFloat(angleRate) : defaultMatRate;
+  const lRate = labourRate !== undefined && labourRate !== '' && !isNaN(parseFloat(labourRate)) ? parseFloat(labourRate) : 0;
+  
+  // 2. Material Cost (Calculated from Grand Total Material Weight × Material Rate)
+  const isSeparateRates = (sheetRate !== undefined && pipeRate !== undefined && sheetRate !== pipeRate && sheetRate !== '' && pipeRate !== '');
+  const sheetCost = totalSheetWeight * sRate;
+  const pipeCost = totalPipeWeight * pRate;
+  const angleCost = totalAngleWeight * aRate;
+  const computedMaterialCost = isSeparateRates 
+    ? (sheetCost + pipeCost + angleCost)
+    : (totalWeight * defaultMatRate);
 
-  // 1. Material Cost from fabricated weight
-  const materialCost = calculateMaterialCost(totalWeight, rate);
+  // 3. Labour Cost (Grand Total Material Weight × Labour Rate per kg)
+  let computedLabourCost = 0;
+  if (lRate > 0) {
+    computedLabourCost = calculateLabourCost(totalWeight, lRate);
+  } else if (labourCost !== undefined && !isNaN(parseFloat(labourCost)) && parseFloat(labourCost) > 0) {
+    computedLabourCost = parseFloat(labourCost);
+  }
 
-  // 2. Purchased Item Cost calculated separately
+  // 4. Purchased & Compressor Items Cost
   const purchasedItemCost = calculatePurchasedTotal(uniquePurchasedRows);
 
-  // 3. Discount applied ONLY to Material Cost
-  const discountedMaterialCost = calculateDiscountedMaterialCost(materialCost, disc);
+  // 5. Grand Total Internal Cost (Subtotal = Material Cost + Labour Cost + Purchased Item Cost)
+  const subtotal = computedMaterialCost + computedLabourCost + purchasedItemCost;
 
-  // 4. Combined Taxable Base for GST
-  const taxableAmount = calculateTaxableAmount(discountedMaterialCost, purchasedItemCost, labour);
+  // 6. Selling Amount & Selling Price PER UNIT
+  const sellPct = parseFloat(sellingPercentage) || 0;
+  const sellingAmount = calculateSellingAmount(subtotal, sellPct);
+  const unitSellingPrice = subtotal + sellingAmount;
+  const sellingPrice = unitSellingPrice; // Legacy alias
 
-  // 5. GST Amount
-  const gstAmount = calculateGSTAmount(taxableAmount, gstPct);
+  // 7. Counter Quantity & Total Selling Price
+  const counterQty = Math.max(1, parseInt(counterQuantity, 10) || 1);
+  const totalSellingPrice = unitSellingPrice * counterQty;
 
-  // 6. Grand Total Estimate
-  const grandTotal = calculateGrandTotalEstimate(discountedMaterialCost, purchasedItemCost, labour, gstAmount);
+  // 8. GST Amount (Calculated on Total Selling Price)
+  // If GST is empty or 0, GST Amount is 0 (Per Requirement 9 & 10)
+  const gstPct = (gst !== undefined && gst !== null && gst !== '' && !isNaN(parseFloat(gst)))
+    ? parseFloat(gst)
+    : 0;
+  const gstAmount = calculateGSTAmount(totalSellingPrice, gstPct);
+
+  // 9. Discount & Final Grand Total
+  const disc = parseFloat(discount) || 0;
+  const finalTotal = calculateFinalTotal(totalSellingPrice, gstAmount, disc);
 
   return {
+    totalSheetWeight,
+    totalPipeWeight,
+    totalAngleWeight,
     totalWeight,
-    materialRate: rate,
-    materialCost,
+    totalMaterialWeight: totalWeight,
+    materialRate: sRate,
+    sheetRate: sRate,
+    pipeRate: pRate,
+    angleRate: aRate,
+    sheetCost,
+    pipeCost,
+    angleCost,
+    materialCost: computedMaterialCost,
+    labourRate: lRate,
+    labourCost: computedLabourCost,
     purchasedItemCost,
     purchasedItemsCost: purchasedItemCost,
-    discountedMaterialCost,
-    labourCost: labour,
-    discount: disc,
-    taxableAmount,
+    subtotal,
+    sellingPercentage: sellPct,
+    sellingAmount,
+    unitSellingPrice,
+    sellingPrice: unitSellingPrice,
+    counterQuantity: counterQty,
+    totalSellingPrice,
     gstPercent: gstPct,
     gstAmount,
-    grandTotal,
-    totalAmount: grandTotal
+    discount: disc,
+    finalTotal,
+    grandTotal: finalTotal,
+    totalAmount: finalTotal,
+    taxableAmount: totalSellingPrice,
+    discountedMaterialCost: computedMaterialCost
   };
 }
 
@@ -450,19 +572,17 @@ export function calculateEstimate({
 /**
  * Format weight for display
  * @param {number|string} weight 
- * @returns {string} e.g. "9.74 kg" or "—"
+ * @returns {string} e.g. "9.74 kg" or "0.00 kg"
  */
 export function formatWeight(weight) {
-  if (weight === null || weight === undefined || weight === '') return '—';
+  if (weight === null || weight === undefined || weight === '') return '0.00 kg';
   const val = parseFloat(weight);
-  if (isNaN(val) || val <= 0) return '—';
+  if (isNaN(val) || val < 0) return '0.00 kg';
   return `${val.toFixed(2)} kg`;
 }
 
 /**
  * Format purchased item total price for table display
- * @param {number|string} price 
- * @returns {string} e.g. "₹ 200.00" or "—"
  */
 export function formatPurchasedPrice(price) {
   if (price === null || price === undefined || price === '') return '—';
@@ -472,16 +592,7 @@ export function formatPurchasedPrice(price) {
 }
 
 /**
- * Format purchased item total weight (legacy compatibility)
- */
-export function formatPurchasedWeight() {
-  return '—';
-}
-
-/**
  * Format currency with Indian grouping (₹XX,XXX.XX)
- * @param {number|string} amount 
- * @returns {string} e.g. "₹ 14,924.80"
  */
 export function formatCurrency(amount) {
   if (amount === null || amount === undefined || amount === '') return '₹ 0.00';
@@ -492,8 +603,6 @@ export function formatCurrency(amount) {
 
 /**
  * Convert numeric amount into Indian Currency Words (Lakhs, Crores, Thousands, Paise)
- * @param {number|string} amount 
- * @returns {string} e.g. "Indian Rupees Fourteen Thousand Nine Hundred Twenty Five Only"
  */
 export function numberToWords(amount) {
   if (amount === null || amount === undefined || amount === '') return 'Zero Rupees Only';
@@ -565,4 +674,3 @@ export function numberToWords(amount) {
   result += ' Only';
   return result;
 }
-
