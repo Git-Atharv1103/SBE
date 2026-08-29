@@ -282,6 +282,7 @@ export function getItemSizeOptions(materialName) {
 // =========================================================================
 export const COUNTER_TYPES = [
   'Working Table',
+  'Counter',
   'Sink Unit',
   'Sink Unit with Table',
   'Soiled Dish Table',
@@ -309,6 +310,13 @@ export const COUNTER_TYPES_CONFIG = {
     hasSubtypes: false,
     subtypes: [],
     aliases: ['Working Table', 'Table', 'Stainless Steel Kitchen', 'SS Kitchen', 'Work Table'],
+    hasDepth: false,
+    requiresAngle: false
+  },
+  'Counter': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Counter', 'Counters'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -585,6 +593,74 @@ export const COUNTER_CONFIG = {
     angles: [],
     purchased: [
       { materialName: 'Bush', price: '', isRepeatable: false }
+    ]
+  },
+
+  'Counter': {
+    hasDepth: false,
+    requiresAngle: false,
+    repeatableComponents: [
+      'Top', 'Under Shelf', 'Side Covering – Right', 'Side Covering – Left', 'Front Covering',
+      'Door', 'Drawer', 'Partition', 'Overhead Covering Left', 'Overhead Covering Right',
+      'Overhead Top Covering Left', 'Overhead Top Covering Right', 'Overhead Top Covering Front',
+      'Overhead Shelf', 'Overhead Shelf Covering', 'Overhead Shelf Door', 'Overhead Shelf Partition',
+      'Roof', 'Tank', 'Leg Pipe', 'Top Support Pipe', 'Shelf Support Pipe', 'Under Support Pipe',
+      'Overhead Shelf Pipe', 'Handle', 'Hinges', 'Glass', 'GN Pan', 'Round Pot', 'Coil', 'Switch',
+      'Wire 3 Pin', 'Patti Wal', 'Wheel', 'Bush', 'Lock', 'Dosa Plate', 'Pan Support', 'Casting',
+      'Burner', 'Copper Pipe', 'NCV', 'Gas Manifold', 'Mixing Tube', 'Onion Cloth', 'Dosa Burner'
+    ],
+    sheets: [
+      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Side Covering – Right', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Side Covering – Left', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Covering Left', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Covering Right', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Overhead Shelf Covering', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Shelf Door', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Overhead Shelf Partition', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Tank', grade: '304', gauge: 1.2, isRepeatable: true }
+    ],
+    pipes: [
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+    ],
+    angles: [],
+    purchased: [
+      { materialName: 'Handle', price: '', isRepeatable: true },
+      { materialName: 'Hinges', price: '', isRepeatable: true },
+      { materialName: 'Glass', price: '', isRepeatable: true },
+      { materialName: 'GN Pan', price: '', dropdownOptions: GN_PAN_OPTIONS, allowMultiple: true, isRepeatable: true },
+      { materialName: 'Round Pot', price: '', dropdownOptions: ROUND_POT_SIZES, allowMultiple: true, isRepeatable: true },
+      { materialName: 'Coil', price: '', isRepeatable: true },
+      { materialName: 'Switch', price: '', isRepeatable: true },
+      { materialName: 'Wire 3 Pin', price: '', isRepeatable: true },
+      { materialName: 'Patti Wal', price: '', isRepeatable: true },
+      { materialName: 'Wheel', price: '', isRepeatable: true },
+      { materialName: 'Bush', price: '', isRepeatable: true },
+      { materialName: 'Lock', price: '', isRepeatable: true },
+      { materialName: 'Dosa Plate', price: '', isRepeatable: true },
+      { materialName: 'Pan Support', price: '', isRepeatable: true },
+      { materialName: 'Casting', price: '', isRepeatable: true },
+      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: COPPER_PIPE_SIZES, allowMultiple: true, isRepeatable: true },
+      { materialName: 'NCV', price: '', isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: true },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: MIXING_TUBE_SIZES, allowMultiple: true, isRepeatable: true },
+      { materialName: 'Onion Cloth', price: '', isRepeatable: true },
+      { materialName: 'Dosa Burner', price: '', dropdownOptions: DOSA_BURNER_SIZES, allowMultiple: true, isRepeatable: true }
     ]
   },
 
@@ -1579,6 +1655,8 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       configKey = 'Bain Merry Marie';
     } else if (target.includes('Tea Counter')) {
       configKey = 'Tea Counter';
+    } else if (target.toLowerCase() === 'counter' || target.toLowerCase() === 'counters' || target.toLowerCase().startsWith('counter ') || target === 'Counter') {
+      configKey = 'Counter';
     } else if (target.includes('Round Pot') || target.includes('GN Pan') || target.includes('GN PAN')) {
       configKey = 'GN PAN / ROUND POT';
     }

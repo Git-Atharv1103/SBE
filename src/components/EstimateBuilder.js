@@ -226,6 +226,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const normalizeCounterName = (rawName) => {
     const clean = (rawName || '').trim();
     const lower = clean.toLowerCase();
+    if (lower === 'tea counter') return 'Tea Counter';
+    if (lower === 'counter' || lower === 'counters') return 'Counter';
     if (lower === 'stainless steel kitchen' || lower === 'table' || lower === 'work table' || lower === 'working table') return 'Working Table';
     if (lower === 'storage' || lower === 'storage bin') return 'Storage Bin';
     if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
