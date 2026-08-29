@@ -295,46 +295,34 @@ export function generateQuotationPDF(estimateData, options = {}) {
   ];
 
   const productRows = [];
+  let itemIndex = 1;
 
-  const mainEquipmentName = estimateData.counterSubtype
-    ? `${estimateData.counterType || 'Commercial Kitchen Equipment'} (${estimateData.counterSubtype})`
-    : (estimateData.counterType || 'Commercial Kitchen Equipment');
+  const rawCountersList = Array.isArray(estimateData.counters) && estimateData.counters.length > 0
+    ? estimateData.counters
+    : [estimateData];
 
-  const counterQty = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
-  const unitRate = calculation.unitSellingPrice || 0;
-  const totalSellingPrice = calculation.totalSellingPrice || (unitRate * counterQty);
+  let totalQty = 0;
+  let subTotalAmount = 0;
 
-  productRows.push([
-    { content: '1', styles: { halign: 'center' } },
-    { content: mainEquipmentName, styles: { halign: 'left', fontStyle: 'normal' } },
-    { content: String(counterQty), styles: { halign: 'center' } },
-    { content: formatRupee(unitRate), styles: { halign: 'right', fontStyle: 'normal' } },
-    { content: formatRupee(totalSellingPrice), styles: { halign: 'right', fontStyle: 'bold' } }
-  ]);
+  rawCountersList.forEach((c) => {
+    const cName = c.counterSubtype
+      ? `${c.counterType || 'Commercial Kitchen Equipment'} (${c.counterSubtype})`
+      : (c.counterType || 'Commercial Kitchen Equipment');
+    const cQty = parseFloat(c.counterQuantity || c.quantity || 1) || 1;
+    const cUnitRate = c.unitSellingPrice || c.sellingPrice || (c.totalSellingPrice ? c.totalSellingPrice / cQty : (calculation.unitSellingPrice || 0));
+    const cTotalAmt = c.totalSellingPrice || (cUnitRate * cQty);
 
-  // Selected Purchased Items with price > 0 and qty > 0 if any
-  let itemIndex = 2;
-  const selectedPurchasedItems = (Array.isArray(estimateData.purchased) ? estimateData.purchased : []).filter(
-    p => p && parseFloat(p.quantity) > 0 && parseFloat(p.price) > 0
-  );
-  selectedPurchasedItems.forEach(p => {
-    const q = parseFloat(p.quantity) || 1;
-    const rate = parseFloat(p.price) || 0;
-    const amt = q * rate;
-    const name = p.size ? `${p.material} (${p.size})` : p.material;
+    totalQty += cQty;
+    subTotalAmount += cTotalAmt;
 
     productRows.push([
       { content: String(itemIndex++), styles: { halign: 'center' } },
-      { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
-      { content: String(q), styles: { halign: 'center' } },
-      { content: formatRupee(rate), styles: { halign: 'right', fontStyle: 'normal' } },
-      { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
+      { content: cName, styles: { halign: 'left', fontStyle: 'normal' } },
+      { content: String(cQty), styles: { halign: 'center' } },
+      { content: formatRupee(cUnitRate), styles: { halign: 'right', fontStyle: 'normal' } },
+      { content: formatRupee(cTotalAmt), styles: { halign: 'right', fontStyle: 'bold' } }
     ]);
   });
-
-  // Total Summary rows
-  const totalQty = counterQty + selectedPurchasedItems.reduce((s, p) => s + (parseFloat(p.quantity) || 0), 0);
-  const subTotalAmount = totalSellingPrice + selectedPurchasedItems.reduce((s, p) => s + ((parseFloat(p.quantity) || 0) * (parseFloat(p.price) || 0)), 0);
 
   if (calculation.gstAmount > 0) {
     productRows.push([

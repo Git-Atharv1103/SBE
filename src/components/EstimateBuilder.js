@@ -233,7 +233,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     if (lower === 'working table' || lower === 'table' || lower === 'work table' || lower === 'stainless steel kitchen') return 'Working Table';
     if (lower === 'storage' || lower === 'storage bin') return 'Storage Bin';
     if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
-    if (lower.includes('bain merry') || lower.includes('bain marie')) return 'Bain Merry Marie';
+    if (lower.includes('bain meriy') || lower.includes('bain merry') || lower.includes('bain marie')) return 'Bain Meriy';
     if (lower.includes('gn pan') || lower.includes('round pot') || lower.includes('round. pot')) return 'GN PAN / ROUND POT';
     if (lower === 'dish rack') return 'SS Dish Rack';
     return clean;
@@ -2423,6 +2423,85 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               <span className="text-[11px] font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded border border-slate-200">
                 {clientData.estimateNumber}
               </span>
+            </div>
+
+            {/* MULTI-COUNTER ITEMS SUMMARY TABLE */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Configured Counters for {clientData.customerName || 'Customer'}
+                </span>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-800 border border-violet-200">
+                  {allCountersCalculations.length} Counter(s) in Estimate
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
+                      <th className="py-2.5 px-3 text-center w-12">#</th>
+                      <th className="py-2.5 px-3">Counter</th>
+                      <th className="py-2.5 px-3 text-center w-20">Qty</th>
+                      <th className="py-2.5 px-3 text-right w-28">Weight (kg)</th>
+                      <th className="py-2.5 px-3 text-right w-32">Selling Price / Unit</th>
+                      <th className="py-2.5 px-3 text-right w-36">Total Selling Price</th>
+                      <th className="py-2.5 px-3 text-center w-28">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
+                    {allCountersCalculations.map((c, i) => {
+                      const calc = c.calculation;
+                      const isCurrent = i === activeCounterIndex;
+                      return (
+                        <tr key={c.id || i} className={isCurrent ? 'bg-violet-50/50' : 'hover:bg-slate-50/50'}>
+                          <td className="py-3 px-3 text-center font-bold text-slate-500">{i + 1}</td>
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-slate-900 block">{c.counterType}</span>
+                            {c.counterSubtype && (
+                              <span className="text-[10px] text-slate-500">{c.counterSubtype}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center font-bold font-mono">{c.counterQuantity || 1}</td>
+                          <td className="py-3 px-3 text-right font-black font-mono text-amber-700">
+                            {calc.totalWeight.toFixed(2)} kg
+                          </td>
+                          <td className="py-3 px-3 text-right font-medium font-mono text-slate-700">
+                            {formatCurrency(calc.unitSellingPrice)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-black font-mono text-emerald-700">
+                            {formatCurrency(calc.totalSellingPrice)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSwitchCounter(i);
+                                setCurrentStep(2);
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 cursor-pointer"
+                            >
+                              Edit Specs
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {allCountersCalculations.length > 1 && (
+                    <tfoot className="bg-slate-100/80 border-t-2 border-slate-300 text-xs font-bold">
+                      <tr>
+                        <td colSpan={2} className="py-2.5 px-3 text-slate-900 uppercase">Grand Summary</td>
+                        <td className="py-2.5 px-3 text-center font-black font-mono">{aggregateMultiCounterTotal.totalUnits}</td>
+                        <td className="py-2.5 px-3 text-right font-black font-mono text-amber-900">{aggregateMultiCounterTotal.totalMaterialWeight.toFixed(2)} kg</td>
+                        <td className="py-2.5 px-3 text-right text-slate-500">—</td>
+                        <td className="py-2.5 px-3 text-right font-black font-mono text-emerald-800">{formatCurrency(aggregateMultiCounterTotal.totalSellingPrice)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
 
             {/* 4-Box Primary Selling Price Grid */}

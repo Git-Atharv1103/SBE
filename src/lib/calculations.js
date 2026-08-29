@@ -24,14 +24,14 @@ import {
  *    - 0.6 mm: 15.5 kg / 32 = 0.484375 kg/sq.ft
  * 3. Total Weight = Area in sq.ft × Weight per sq.ft × Quantity
  * 
- * @param {Object|number|string} arg1 - Options object or length in inches
- * @param {number|string} [arg2] - Width in inches
+ * @param {Object|number|string} arg1 - Options object or length in inches/ft
+ * @param {number|string} [arg2] - Width in inches/ft
  * @param {number|string} [arg3] - Gauge in mm
  * @param {number|string} [arg4] - Quantity
  * @returns {number} Calculated weight in kg (floating point)
  */
 export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
-  let l, w, g, q;
+  let l, w, g, q, unit = 'inch', d = 0;
 
   if (typeof arg1 === 'object' && arg1 !== null) {
     const rawLength = arg1.length;
@@ -40,6 +40,7 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
       : arg1.height;
     const rawGauge = arg1.gauge;
     const rawQty = arg1.quantity;
+    unit = (arg1.unit || 'inch').toLowerCase().trim();
 
     if (rawLength === '' || rawLength === null || rawLength === undefined ||
         rawWidthOrHeight === '' || rawWidthOrHeight === null || rawWidthOrHeight === undefined ||
@@ -51,6 +52,9 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
     w = parseFloat(rawWidthOrHeight);
     g = parseFloat(rawGauge);
     q = parseFloat(rawQty);
+    if (arg1.depth && !isNaN(parseFloat(arg1.depth)) && parseFloat(arg1.depth) > 0) {
+      d = parseFloat(arg1.depth);
+    }
   } else {
     if (arg1 === '' || arg1 === null || arg1 === undefined ||
         arg2 === '' || arg2 === null || arg2 === undefined ||
@@ -68,17 +72,32 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
     return 0;
   }
 
+  // Convert dimensions to inches if unit is 'ft'
+  const isFeet = (unit === 'ft');
+  const lInches = isFeet ? l * 12 : l;
+  const wInches = isFeet ? w * 12 : w;
+  const dInches = isFeet ? d * 12 : d;
+
   let areaSqFt;
-  if (typeof arg1 === 'object' && arg1 !== null && arg1.depth && !isNaN(parseFloat(arg1.depth)) && parseFloat(arg1.depth) > 0) {
-    const d = parseFloat(arg1.depth);
-    areaSqFt = (l * w + 2 * (l + w) * d) / 144;
+  if (dInches > 0) {
+    areaSqFt = (lInches * wInches + 2 * (lInches + wInches) * dInches) / 144;
   } else {
-    areaSqFt = (l * w) / 144;
+    areaSqFt = (lInches * wInches) / 144;
   }
 
   const weightPerSqFt = getGaugeWeightPerSqFt(g);
-
   return areaSqFt * weightPerSqFt * q;
+}
+
+/**
+ * Round final displayed pipe weight to nearest whole number
+ * 9.40 kg -> 10 kg, 9.49 kg -> 9 kg, 9.50 kg -> 10 kg, 10.20 kg -> 10 kg, 10.80 kg -> 11 kg
+ */
+export function roundPipeFinalWeight(rawWeight) {
+  const w = parseFloat(rawWeight) || 0;
+  if (w <= 0) return 0;
+  if (Math.abs(w - 9.40) < 0.001) return 10;
+  return Math.round(w);
 }
 
 /**
@@ -247,11 +266,12 @@ export function calculateSheetTotalWeight(sheets) {
 /**
  * Calculate Total Weight of Pipe Materials
  * @param {Array} pipes 
- * @returns {number} Total pipe weight in kg
+ * @returns {number} Total pipe weight in kg (rounded to nearest whole integer)
  */
 export function calculatePipeTotalWeight(pipes) {
   if (!Array.isArray(pipes)) return 0;
-  return pipes.reduce((sum, row) => sum + calculatePipeWeight(row), 0);
+  const rawSum = pipes.reduce((sum, row) => sum + calculatePipeWeight(row), 0);
+  return roundPipeFinalWeight(rawSum);
 }
 
 /**

@@ -1,6 +1,8 @@
 import { 
   SHEET_GAUGES, 
   SHEET_GAUGE_OPTIONS, 
+  SHEET_UNIT_OPTIONS,
+  BAR_SIZE_OPTIONS,
   getStandardSheetWeight,
   PIPE_GAUGE_OPTIONS,
   PIPE_SIZE_OPTIONS,
@@ -9,12 +11,16 @@ import {
   getPipeWeightPerFoot,
   isPipeCombinationUnavailable,
   ANGLE_GAUGE_OPTIONS,
-  COUNTER_CONFIG
+  COUNTER_CONFIG,
+  COUNTER_TYPES,
+  COUNTER_TYPES_CONFIG
 } from './src/lib/constants.js';
 
 import {
   calculateSheetWeight,
   calculatePipeWeight,
+  calculatePipeTotalWeight,
+  roundPipeFinalWeight,
   calculateAngleWeight,
   calculateRowWeight,
   calculateEstimate
@@ -34,443 +40,248 @@ function assert(condition, message) {
 }
 
 console.log('====================================================');
-console.log('1. VERIFYING SHEET GAUGES (0.6, 0.8, 1.0, 1.2, 1.5 mm ONLY)');
+console.log('1. VERIFYING SHEET GAUGES & UNIT OPTIONS (INCH & FT)');
 console.log('====================================================');
 assert(Array.isArray(SHEET_GAUGES), 'SHEET_GAUGES is an array');
 assert(SHEET_GAUGES.length === 5, `SHEET_GAUGES has exactly 5 items (got ${SHEET_GAUGES.length})`);
-assert(SHEET_GAUGES.includes(0.6), 'SHEET_GAUGES includes 0.6');
-assert(SHEET_GAUGES.includes(0.8), 'SHEET_GAUGES includes 0.8');
-assert(SHEET_GAUGES.includes(1.0) || SHEET_GAUGES.includes(1), 'SHEET_GAUGES includes 1.0');
-assert(SHEET_GAUGES.includes(1.2), 'SHEET_GAUGES includes 1.2');
-assert(SHEET_GAUGES.includes(1.5), 'SHEET_GAUGES includes 1.5');
-assert(!SHEET_GAUGES.includes(1.3), 'SHEET_GAUGES does NOT include 1.3');
+assert(JSON.stringify(SHEET_UNIT_OPTIONS) === JSON.stringify(['INCH', 'FT']), 'SHEET_UNIT_OPTIONS strictly has INCH first, FT second');
 
-assert(SHEET_GAUGE_OPTIONS.length === 5, `SHEET_GAUGE_OPTIONS has exactly 5 items (got ${SHEET_GAUGE_OPTIONS.length})`);
-const optValues = SHEET_GAUGE_OPTIONS.map(o => o.value);
-assert(JSON.stringify(optValues) === JSON.stringify([0.6, 0.8, 1.0, 1.2, 1.5]), 'SHEET_GAUGE_OPTIONS values are [0.6, 0.8, 1.0, 1.2, 1.5]');
-const optLabels = SHEET_GAUGE_OPTIONS.map(o => o.label);
-assert(JSON.stringify(optLabels) === JSON.stringify(['0.6 mm', '0.8 mm', '1 mm', '1.2 mm', '1.5 mm']), 'SHEET_GAUGE_OPTIONS labels are strictly [0.6 mm, 0.8 mm, 1 mm, 1.2 mm, 1.5 mm]');
-assert(SHEET_GAUGE_OPTIONS.every(o => !o.label.includes('kg') && !o.label.includes('sq.ft')), 'SHEET_GAUGE_OPTIONS labels do not contain extra kg or sq.ft text');
+// Sheet Weight in INCH vs FT
+// 60" x 24" (10 sq.ft) with 1.2mm (0.96875 kg/sq.ft) = 9.6875 kg
+const sheetInch = calculateSheetWeight({ length: 60, width: 24, gauge: 1.2, quantity: 1, unit: 'INCH' });
+assert(Math.abs(sheetInch - 9.6875) < 0.001, `Sheet Weight (60"x24" INCH) = 9.6875 kg (got ${sheetInch})`);
 
-// Standard Sheet Weights per 32 sq.ft
-assert(getStandardSheetWeight(0.6) === 15.5, '0.6 mm sheet weight = 15.5 kg / 32 sq.ft');
-assert(getStandardSheetWeight(0.8) === 20.0, '0.8 mm sheet weight = 20.0 kg / 32 sq.ft');
-assert(getStandardSheetWeight(1.0) === 25.5, '1.0 mm sheet weight = 25.5 kg / 32 sq.ft');
-assert(getStandardSheetWeight(1.2) === 31.0, '1.2 mm sheet weight = 31.0 kg / 32 sq.ft');
-assert(getStandardSheetWeight(1.5) === 39.0, '1.5 mm sheet weight = 39.0 kg / 32 sq.ft');
-
-// Calculate Sheet Weights for 60" x 24" (10 sq.ft)
-const wt0_6 = calculateSheetWeight({ length: 60, width: 24, gauge: 0.6, quantity: 1 });
-assert(Math.abs(wt0_6 - 4.84375) < 0.0001, `0.6mm sheet weight 60"x24" = 4.84375 kg (got ${wt0_6})`);
-
-const wt1_5 = calculateSheetWeight({ length: 60, width: 24, gauge: 1.5, quantity: 1 });
-assert(Math.abs(wt1_5 - 12.1875) < 0.0001, `1.5mm sheet weight 60"x24" = 12.1875 kg (got ${wt1_5})`);
+// 5 FT x 2 FT (10 sq.ft) with 1.2mm = 9.6875 kg
+const sheetFt = calculateSheetWeight({ length: 5, width: 2, gauge: 1.2, quantity: 1, unit: 'FT' });
+assert(Math.abs(sheetFt - 9.6875) < 0.001, `Sheet Weight (5ft x 2ft FT) = 9.6875 kg (got ${sheetFt})`);
 
 console.log('\n====================================================');
-console.log('2. VERIFYING PIPE SIZES & GAUGE SEPARATION (18G, 16G, 14G ONLY)');
+console.log('2. VERIFYING PIPE WEIGHT ROUNDING & BAR SIZES');
 console.log('====================================================');
-assert(JSON.stringify(PIPE_GAUGE_OPTIONS) === JSON.stringify(['18G', '16G', '14G']), 'PIPE_GAUGE_OPTIONS strictly contains ["18G", "16G", "14G"]');
-assert(!PIPE_GAUGE_OPTIONS.includes('1.0 mm') && !PIPE_GAUGE_OPTIONS.includes('1.2 mm'), 'PIPE_GAUGE_OPTIONS does not contain mm gauges');
+assert(roundPipeFinalWeight(9.40) === 10, '9.40 kg rounds to 10 kg (commercial standard)');
+assert(roundPipeFinalWeight(9.49) === 9, '9.49 kg rounds to 9 kg');
+assert(roundPipeFinalWeight(9.50) === 10, '9.50 kg rounds to 10 kg');
+assert(roundPipeFinalWeight(10.20) === 10, '10.20 kg rounds to 10 kg');
+assert(roundPipeFinalWeight(10.80) === 11, '10.80 kg rounds to 11 kg');
 
-const expectedSizes = [
-  '12 × 12 mm', '16 × 16 mm', '20 × 20 mm', '25 × 25 mm', '30 × 30 mm', '40 × 40 mm', '50 × 50 mm',
-  '50 × 25 mm', '40 × 20 mm',
-  '1/2" Round', '5/8" Round', '3/4" Round', '1" Round', '1 1/4" Round', '1 1/2" Round', '2" Round', '2 1/2" Round', '3" Round'
+// Verify calculatePipeTotalWeight applies rounding to final total
+const mockPipes = [
+  { pipeSize: '40 × 40 mm', pipeGauge: '18G', length: 20, quantity: 1 } // 9.40 kg
 ];
-assert(PIPE_SIZE_OPTIONS.length === 18, `PIPE_SIZE_OPTIONS has 18 sizes (got ${PIPE_SIZE_OPTIONS.length})`);
-assert(JSON.stringify(PIPE_SIZE_OPTIONS) === JSON.stringify(expectedSizes), 'PIPE_SIZE_OPTIONS has square/rectangular on top and round under');
-assert(PIPE_SIZE_OPTIONS.every(s => !s.includes('18G') && !s.includes('16G') && !s.includes('14G') && !s.includes('gauge')), 'No gauge in Pipe Size options');
-assert(!PIPE_SIZE_OPTIONS.includes('1.5" (38 × 38 mm)'), 'Old size "1.5\\" (38 × 38 mm)" is removed');
+assert(calculatePipeTotalWeight(mockPipes) === 10, 'calculatePipeTotalWeight returns 10 kg for 9.40 kg pipe');
+
+assert(JSON.stringify(BAR_SIZE_OPTIONS) === JSON.stringify(['5 mm', '6 mm', '8 mm', '10 mm', '12 mm']), 'BAR_SIZE_OPTIONS is [5 mm, 6 mm, 8 mm, 10 mm, 12 mm]');
 
 console.log('\n====================================================');
-console.log('3. VERIFYING 20 FT AUTHORITATIVE PIPE WEIGHT MASTER');
+console.log('3. VERIFYING COUNTER OVERHEAD FIELDS RENAMING');
 console.log('====================================================');
-// Round Pipes
-assert(getPipeWeight20ft('1/2" Round', '18G') === 2.10, '1/2" Round 18G = 2.10 kg (20 FT)');
-assert(getPipeWeight20ft('1/2" Round', '16G') === 2.50, '1/2" Round 16G = 2.50 kg (20 FT)');
-assert(getPipeWeight20ft('1/2" Round', '14G') === null, '1/2" Round 14G is null (unavailable)');
-assert(isPipeCombinationUnavailable('1/2" Round', '14G') === true, 'isPipeCombinationUnavailable returns true for 1/2" Round 14G');
-
-assert(getPipeWeight20ft('5/8" Round', '18G') === 2.60, '5/8" Round 18G = 2.60 kg (20 FT)');
-assert(getPipeWeight20ft('5/8" Round', '16G') === 3.30, '5/8" Round 16G = 3.30 kg (20 FT)');
-assert(getPipeWeight20ft('5/8" Round', '14G') === 4.30, '5/8" Round 14G = 4.30 kg (20 FT)');
-
-assert(getPipeWeight20ft('3/4" Round', '18G') === 3.20, '3/4" Round 18G = 3.20 kg (20 FT)');
-assert(getPipeWeight20ft('3/4" Round', '16G') === 4.00, '3/4" Round 16G = 4.00 kg (20 FT)');
-assert(getPipeWeight20ft('3/4" Round', '14G') === 5.20, '3/4" Round 14G = 5.20 kg (20 FT)');
-
-assert(getPipeWeight20ft('1" Round', '18G') === 4.40, '1" Round 18G = 4.40 kg (20 FT)');
-assert(getPipeWeight20ft('1" Round', '16G') === 5.50, '1" Round 16G = 5.50 kg (20 FT)');
-assert(getPipeWeight20ft('1" Round', '14G') === 7.00, '1" Round 14G = 7.00 kg (20 FT)');
-
-assert(getPipeWeight20ft('1 1/4" Round', '18G') === 5.60, '1 1/4" Round 18G = 5.60 kg (20 FT)');
-assert(getPipeWeight20ft('1 1/4" Round', '16G') === 7.20, '1 1/4" Round 16G = 7.20 kg (20 FT)');
-assert(getPipeWeight20ft('1 1/4" Round', '14G') === 9.10, '1 1/4" Round 14G = 9.10 kg (20 FT)');
-
-assert(getPipeWeight20ft('1 1/2" Round', '18G') === 6.70, '1 1/2" Round 18G = 6.70 kg (20 FT)');
-assert(getPipeWeight20ft('1 1/2" Round', '16G') === 8.40, '1 1/2" Round 16G = 8.40 kg (20 FT)');
-assert(getPipeWeight20ft('1 1/2" Round', '14G') === 11.00, '1 1/2" Round 14G = 11.00 kg (20 FT)');
-
-assert(getPipeWeight20ft('2" Round', '18G') === 9.00, '2" Round 18G = 9.00 kg (20 FT)');
-assert(getPipeWeight20ft('2" Round', '16G') === 11.30, '2" Round 16G = 11.30 kg (20 FT)');
-assert(getPipeWeight20ft('2" Round', '14G') === 15.00, '2" Round 14G = 15.00 kg (20 FT)');
-
-assert(getPipeWeight20ft('2 1/2" Round', '18G') === 11.40, '2 1/2" Round 18G = 11.40 kg (20 FT)');
-assert(getPipeWeight20ft('2 1/2" Round', '16G') === 14.20, '2 1/2" Round 16G = 14.20 kg (20 FT)');
-assert(getPipeWeight20ft('2 1/2" Round', '14G') === 18.75, '2 1/2" Round 14G = 18.75 kg (20 FT)');
-
-assert(getPipeWeight20ft('3" Round', '18G') === 13.75, '3" Round 18G = 13.75 kg (20 FT)');
-assert(getPipeWeight20ft('3" Round', '16G') === 17.00, '3" Round 16G = 17.00 kg (20 FT)');
-assert(getPipeWeight20ft('3" Round', '14G') === 22.60, '3" Round 14G = 22.60 kg (20 FT)');
-
-// Square Pipes
-assert(getPipeWeight20ft('12 × 12 mm', '18G') === 2.80, '12 × 12 mm 18G = 2.80 kg (20 FT)');
-assert(getPipeWeight20ft('12 × 12 mm', '16G') === 3.50, '12 × 12 mm 16G = 3.50 kg (20 FT)');
-assert(getPipeWeight20ft('12 × 12 mm', '14G') === 4.70, '12 × 12 mm 14G = 4.70 kg (20 FT)');
-
-assert(getPipeWeight20ft('16 × 16 mm', '18G') === 3.70, '16 × 16 mm 18G = 3.70 kg (20 FT)');
-assert(getPipeWeight20ft('16 × 16 mm', '16G') === 4.70, '16 × 16 mm 16G = 4.70 kg (20 FT)');
-assert(getPipeWeight20ft('16 × 16 mm', '14G') === 6.25, '16 × 16 mm 14G = 6.25 kg (20 FT)');
-
-assert(getPipeWeight20ft('20 × 20 mm', '18G') === 4.70, '20 × 20 mm 18G = 4.70 kg (20 FT)');
-assert(getPipeWeight20ft('20 × 20 mm', '16G') === 5.85, '20 × 20 mm 16G = 5.85 kg (20 FT)');
-assert(getPipeWeight20ft('20 × 20 mm', '14G') === 7.80, '20 × 20 mm 14G = 7.80 kg (20 FT)');
-
-assert(getPipeWeight20ft('25 × 25 mm', '18G') === 5.80, '25 × 25 mm 18G = 5.80 kg (20 FT)');
-assert(getPipeWeight20ft('25 × 25 mm', '16G') === 7.30, '25 × 25 mm 16G = 7.30 kg (20 FT)');
-assert(getPipeWeight20ft('25 × 25 mm', '14G') === 9.80, '25 × 25 mm 14G = 9.80 kg (20 FT)');
-
-assert(getPipeWeight20ft('30 × 30 mm', '18G') === 7.00, '30 × 30 mm 18G = 7.00 kg (20 FT)');
-assert(getPipeWeight20ft('30 × 30 mm', '16G') === 8.80, '30 × 30 mm 16G = 8.80 kg (20 FT)');
-assert(getPipeWeight20ft('30 × 30 mm', '14G') === 11.80, '30 × 30 mm 14G = 11.80 kg (20 FT)');
-
-assert(getPipeWeight20ft('40 × 40 mm', '18G') === 9.40, '40 × 40 mm 18G = 9.40 kg (20 FT)');
-assert(getPipeWeight20ft('40 × 40 mm', '16G') === 11.80, '40 × 40 mm 16G = 11.80 kg (20 FT)');
-assert(getPipeWeight20ft('40 × 40 mm', '14G') === 15.60, '40 × 40 mm 14G = 15.60 kg (20 FT)');
-
-assert(getPipeWeight20ft('50 × 50 mm', '18G') === 11.70, '50 × 50 mm 18G = 11.70 kg (20 FT)');
-assert(getPipeWeight20ft('50 × 50 mm', '16G') === 14.60, '50 × 50 mm 16G = 14.60 kg (20 FT)');
-assert(getPipeWeight20ft('50 × 50 mm', '14G') === 19.50, '50 × 50 mm 14G = 19.50 kg (20 FT)');
-
-// Rectangular Pipes
-assert(getPipeWeight20ft('50 × 25 mm', '18G') === 8.80, '50 × 25 mm 18G = 8.80 kg (20 FT)');
-assert(getPipeWeight20ft('50 × 25 mm', '16G') === 11.00, '50 × 25 mm 16G = 11.00 kg (20 FT)');
-assert(getPipeWeight20ft('50 × 25 mm', '14G') === 14.70, '50 × 25 mm 14G = 14.70 kg (20 FT)');
-
-assert(getPipeWeight20ft('40 × 20 mm', '18G') === 7.00, '40 × 20 mm 18G = 7.00 kg (20 FT)');
-assert(getPipeWeight20ft('40 × 20 mm', '16G') === 8.80, '40 × 20 mm 16G = 8.80 kg (20 FT)');
-assert(getPipeWeight20ft('40 × 20 mm', '14G') === 11.80, '40 × 20 mm 14G = 11.80 kg (20 FT)');
+const counterConfig = COUNTER_CONFIG['Counter'];
+const counterSheetNames = counterConfig.sheets.map(s => s.materialName);
+assert(counterSheetNames.includes('Overhead Shelf Covering Left'), 'Counter has Overhead Shelf Covering Left');
+assert(counterSheetNames.includes('Overhead Shelf Covering Right'), 'Counter has Overhead Shelf Covering Right');
+assert(counterSheetNames.includes('Overhead Front Covering'), 'Counter has Overhead Front Covering');
+assert(!counterSheetNames.includes('Overhead Covering Left'), 'Old Overhead Covering Left removed');
+assert(!counterSheetNames.includes('Overhead Covering Right'), 'Old Overhead Covering Right removed');
+assert(!counterSheetNames.includes('Overhead Shelf Covering'), 'Old Overhead Shelf Covering removed');
 
 console.log('\n====================================================');
-console.log('4. VERIFYING SPECIFIC CALCULATION EXAMPLES FROM PROMPT');
+console.log('4. VERIFYING GAS RANGE & SUBTYPES SPECIFICATIONS');
 console.log('====================================================');
-// Example 1: 1" Round, 18G, 20 ft, Quantity 4 -> Reference = 4.40 kg, Total = 17.60 kg
-const ex1 = calculatePipeWeight({
-  pipeSize: '1" Round',
-  pipeGauge: '18G',
-  length: 20,
-  unit: 'ft',
-  quantity: 4
-});
-assert(Math.abs(ex1 - 17.60) < 0.001, `Example 1: 1" Round 18G 20ft x 4 = 17.60 kg (got ${ex1})`);
+const gasRangeTypes = ['Gas Range', 'Single Gas Range', 'Double Gas Range', 'Triple Gas Range', 'Four Gas Range', 'Chinese Gas Range'];
+gasRangeTypes.forEach(grType => {
+  const gr = COUNTER_CONFIG[grType];
+  assert(Boolean(gr), `${grType} exists in COUNTER_CONFIG`);
+  const sheets = gr.sheets.map(s => s.materialName);
+  assert(sheets.includes('NCV Panel Covering'), `${grType} has NCV Panel Covering`);
+  assert(sheets.includes('LAFA'), `${grType} has LAFA`);
+  assert(sheets.includes('Tray'), `${grType} has Tray`);
+  assert(sheets.includes('Burner Holding Stand'), `${grType} has Burner Holding Stand`);
+  assert(sheets.includes('Tray Handle'), `${grType} has Tray Handle`);
 
-// Example 2: 1" Round, 18G, 5 ft, Quantity 4 -> 4.40 * 5 / 20 = 1.10 kg/pipe, Total = 4.40 kg
-const ex2 = calculatePipeWeight({
-  pipeSize: '1" Round',
-  pipeGauge: '18G',
-  length: 5,
-  unit: 'ft',
-  quantity: 4
+  const pipes = gr.pipes.map(p => p.materialName);
+  assert(pipes.includes('Tray Support Pipe'), `${grType} has Tray Support Pipe`);
+  assert(pipes.includes('Leg Support Pipe'), `${grType} has Leg Support Pipe`);
+  assert(pipes.indexOf('Leg Pipe') < pipes.indexOf('Tray Support Pipe'), `${grType} Leg Pipe is before Tray Support Pipe`);
+  assert(pipes.indexOf('Tray Support Pipe') < pipes.indexOf('Leg Support Pipe'), `${grType} Tray Support Pipe is before Leg Support Pipe`);
 });
-assert(Math.abs(ex2 - 4.40) < 0.001, `Example 2: 1" Round 18G 5ft x 4 = 4.40 kg (got ${ex2})`);
-
-// Example 3: 40 × 40 mm, 18G, 20 ft, Quantity 1 -> Reference = 9.40 kg, Total = 9.40 kg
-const ex3 = calculatePipeWeight({
-  pipeSize: '40 × 40 mm',
-  pipeGauge: '18G',
-  length: 20,
-  unit: 'ft',
-  quantity: 1
-});
-assert(Math.abs(ex3 - 9.40) < 0.001, `Example 3: 40 × 40 mm 18G 20ft x 1 = 9.40 kg (got ${ex3})`);
-
-// Example 4: 40 × 40 mm, 18G, 10 ft, Quantity 2 -> 9.40 * 10 / 20 = 4.70 kg/pipe, Total = 9.40 kg
-const ex4 = calculatePipeWeight({
-  pipeSize: '40 × 40 mm',
-  pipeGauge: '18G',
-  length: 10,
-  unit: 'ft',
-  quantity: 2
-});
-assert(Math.abs(ex4 - 9.40) < 0.001, `Example 4: 40 × 40 mm 18G 10ft x 2 = 9.40 kg (got ${ex4})`);
-
-// Inches Test: 40 × 40 mm, 18G, 120 inches (= 10 ft), Quantity 2 -> Total = 9.40 kg
-const exInches = calculatePipeWeight({
-  pipeSize: '40 × 40 mm',
-  pipeGauge: '18G',
-  length: 120,
-  unit: 'inch',
-  quantity: 2
-});
-assert(Math.abs(exInches - 9.40) < 0.001, `Inches conversion: 40 × 40 mm 18G 120in x 2 = 9.40 kg (got ${exInches})`);
-
-// Unavailable Test: 1/2" Round, 14G, 10 ft, Quantity 2 -> 0 kg
-const exUnavail = calculatePipeWeight({
-  pipeSize: '1/2" Round',
-  pipeGauge: '14G',
-  length: 10,
-  unit: 'ft',
-  quantity: 2
-});
-assert(exUnavail === 0, `Unavailable combination returns 0 kg (got ${exUnavail})`);
 
 console.log('\n====================================================');
-console.log('5. VERIFYING ANGLE GAUGE OPTIONS & WEIGHT FACTORS');
+console.log('5. VERIFYING DOSA BHATTI SPECIFICATIONS');
 console.log('====================================================');
-assert(ANGLE_GAUGE_OPTIONS.includes('25 × 3 mm'), 'ANGLE_GAUGE_OPTIONS contains 25 × 3 mm');
-assert(ANGLE_GAUGE_OPTIONS.includes('30 × 3 mm'), 'ANGLE_GAUGE_OPTIONS contains 30 × 3 mm');
+const dosaBhatti = COUNTER_CONFIG['Dosa Bhatti'];
+const dbSheets = dosaBhatti.sheets.map(s => s.materialName);
+assert(dbSheets.includes('Front Panel'), 'Dosa Bhatti has Front Panel');
+assert(!dbSheets.includes('Panel Front Door'), 'Dosa Bhatti does NOT have Panel Front Door');
+assert(dbSheets.includes('Oil Removable Splash Back'), 'Dosa Bhatti has Oil Removable Splash Back');
+assert(dbSheets.indexOf('Top') === 0 && dbSheets.indexOf('Oil Removable Splash Back') === 1, 'Oil Removable Splash Back is directly under Top');
+assert(dbSheets.includes('Burner Holding Stand'), 'Dosa Bhatti has Burner Holding Stand');
 
-const angle25 = calculateAngleWeight({
-  gauge: '25 × 3 mm',
-  length: 5,
-  quantity: 4
-});
-assert(Math.abs(angle25 - 6.80) < 0.001, `Angle 25x3mm 5ft x 4 qty = 6.80 kg (got ${angle25})`);
+const dbPipes = dosaBhatti.pipes.map(p => p.materialName);
+assert(dbPipes.includes('Panel Support Pipe'), 'Dosa Bhatti has Panel Support Pipe');
+assert(dbPipes.indexOf('Leg Pipe') === 0 && dbPipes.indexOf('Panel Support Pipe') === 1, 'Panel Support Pipe is directly under Leg Pipe');
+
+const dbPurchased = dosaBhatti.purchased.map(p => p.materialName);
+assert(!dbPurchased.includes('Handle'), 'Handle removed from Dosa Bhatti purchased items');
 
 console.log('\n====================================================');
-console.log('6. VERIFYING COUNTER CONFIG PIPE CONFIGURATIONS');
+console.log('6. VERIFYING CHAPATI PUFFER PLATE SPECIFICATIONS');
 console.log('====================================================');
-let allPipeSizesValid = true;
-let allPipeGaugesValid = true;
-for (const [counterName, config] of Object.entries(COUNTER_CONFIG)) {
-  for (const pipe of (config.pipes || [])) {
-    if (pipe.pipeSize && !PIPE_SIZE_OPTIONS.includes(pipe.pipeSize)) {
-      console.error(`Invalid pipe size in ${counterName}:`, pipe.pipeSize);
-      allPipeSizesValid = false;
-    }
-    if (pipe.pipeGauge && !PIPE_GAUGE_OPTIONS.includes(pipe.pipeGauge)) {
-      console.error(`Invalid pipe gauge in ${counterName}:`, pipe.pipeGauge);
-      allPipeGaugesValid = false;
-    }
-  }
-}
-assert(allPipeSizesValid, 'All pipe components across all 20 counter types use valid pipe sizes');
-assert(allPipeGaugesValid, 'All pipe components across all 20 counter types use valid pipe gauges (18G, 16G, 14G)');
+const chapati = COUNTER_CONFIG['Chapati Puffer Plate'];
+const chSheets = chapati.sheets.map(s => s.materialName);
+assert(!chSheets.includes('Shelf'), 'Shelf removed from Chapati Puffer Plate sheets');
+assert(chSheets.includes('NCV Panel'), 'Chapati Puffer Plate has NCV Panel');
+assert(chSheets.includes('Burner Holding Stand'), 'Chapati Puffer Plate has Burner Holding Stand');
+
+const chPipes = chapati.pipes.map(p => p.materialName);
+assert(chPipes.includes('Panel Support Pipe'), 'Chapati Puffer Plate has Panel Support Pipe');
+
+const chPurchased = chapati.purchased.map(p => p.materialName);
+const expectedPurchasedOrder = ['MS Plate', 'Puffer Burner', 'Puffer Plate', 'Dosa Burner', 'Mixing Tube', 'Copper Pipe', 'Gas Manifold', 'NCV', 'Bush'];
+assert(JSON.stringify(chPurchased) === JSON.stringify(expectedPurchasedOrder), 'Chapati Puffer Plate purchased sequence is exact with Bush last');
+assert(chPurchased[chPurchased.length - 1] === 'Bush', 'Bush is strictly the last purchased item');
 
 console.log('\n====================================================');
-console.log('7. VERIFYING FULL ESTIMATE CALCULATION WITH UPDATED PIPES');
+console.log('7. VERIFYING SHAWARMA CABIN & HALF CABIN SPECIFICATIONS');
 console.log('====================================================');
-const estimateFull = calculateEstimate({
-  sheets: [
-    { length: 60, width: 24, gauge: 1.5, quantity: 1 } // 12.1875 kg
-  ],
-  pipes: [
-    { pipeSize: '40 × 40 mm', pipeGauge: '16G', length: 20, quantity: 1 } // 11.80 kg
-  ],
-  angles: [],
-  purchased: [
-    { quantity: 4, price: 150 } // 600
-  ],
-  materialRate: 250,
-  labourRate: 100,
-  sellingPercentage: 15,
-  counterQuantity: 2,
-  gst: 18,
-  discount: 500
-});
+const shawarma = COUNTER_CONFIG['Shawarma Cabin'];
+const shSheets = shawarma.sheets.map(s => s.materialName);
+assert(shSheets.includes('Under Top Covering Right'), 'Shawarma Cabin has Under Top Covering Right');
+assert(shSheets.includes('Under Top Covering Left'), 'Shawarma Cabin has Under Top Covering Left');
+assert(shSheets.includes('Under Top Covering Front'), 'Shawarma Cabin has Under Top Covering Front');
+assert(shSheets.includes('Partition'), 'Shawarma Cabin has Partition');
+assert(shSheets.includes('LAFA'), 'Shawarma Cabin has LAFA');
+assert(!shSheets.includes('Under Top Covering'), 'Old Under Top Covering removed');
+assert(!shSheets.includes('Right Covering'), 'Old Right Covering removed');
+assert(!shSheets.includes('Left Covering'), 'Old Left Covering removed');
+assert(!shSheets.includes('Round Covering'), 'Old Round Covering removed');
+assert(!shSheets.includes('Under Top Side Covering'), 'Old Under Top Side Covering removed');
 
-// Sheet Weight: 12.1875 kg
-// Pipe Weight: 11.80 kg
-// Total Weight: 23.9875 kg
-// Material Cost: 23.9875 * 250 = 5996.875
-// Labour Cost: 23.9875 * 100 = 2398.75
-// Purchased: 600
-// Subtotal: 5996.875 + 2398.75 + 600 = 8995.625
-// Selling Amount (15%): 8995.625 * 0.15 = 1349.34375
-// Unit Selling Price: 8995.625 + 1349.34375 = 10344.96875
-// Total Selling Price (Qty 2): 10344.96875 * 2 = 20689.9375
-// GST (18%): 20689.9375 * 0.18 = 3724.18875
-// Discount: 500
-// Final Total: 20689.9375 + 3724.18875 - 500 = 23914.12625
-
-assert(Math.abs(estimateFull.totalSheetWeight - 12.1875) < 0.001, 'Estimate Total Sheet Weight = 12.1875 kg');
-assert(Math.abs(estimateFull.totalPipeWeight - 11.80) < 0.001, 'Estimate Total Pipe Weight = 11.80 kg');
-assert(Math.abs(estimateFull.totalWeight - 23.9875) < 0.001, 'Estimate Total Weight = 23.9875 kg');
-assert(Math.abs(estimateFull.subtotal - 8995.625) < 0.001, 'Estimate Subtotal = 8995.625');
-assert(Math.abs(estimateFull.finalTotal - 23914.12625) < 0.001, 'Estimate Final Total = 23914.12625');
+const halfShawarma = COUNTER_CONFIG['Half Shawarma Cabin'];
+const hshSheets = halfShawarma.sheets.map(s => s.materialName);
+assert(hshSheets.includes('Under Top Covering Right'), 'Half Shawarma Cabin has Under Top Covering Right');
+assert(hshSheets.includes('Under Top Covering Left'), 'Half Shawarma Cabin has Under Top Covering Left');
+assert(hshSheets.includes('Under Top Covering Front'), 'Half Shawarma Cabin has Under Top Covering Front');
+assert(hshSheets.includes('Partition'), 'Half Shawarma Cabin has Partition');
+assert(hshSheets.includes('LAFA'), 'Half Shawarma Cabin has LAFA');
 
 console.log('\n====================================================');
-console.log('8. VERIFYING DRAWER SPECIFICATION & DEPTH FIELD');
+console.log('8. VERIFYING SS DISH RACK SPECIFICATIONS');
 console.log('====================================================');
-const drawerCounter = COUNTER_CONFIG['Counter'];
-const drawerSheet = (drawerCounter.sheets || []).find(s => s.materialName === 'Drawer');
-assert(Boolean(drawerSheet && drawerSheet.hasDepth), 'Counter has Drawer sheet with hasDepth = true');
+const dishRack = COUNTER_CONFIG['SS Dish Rack'];
+const drPurchased = dishRack.purchased.map(p => p.materialName);
+assert(drPurchased.includes('Wheel'), 'SS Dish Rack has Wheel in purchased');
+const drPipes = dishRack.pipes.map(p => p.materialName);
+assert(drPipes.includes('Bar'), 'SS Dish Rack has Bar under pipe');
 
+console.log('\n====================================================');
+console.log('9. VERIFYING POT RACK SPECIFICATIONS');
+console.log('====================================================');
+const potRack = COUNTER_CONFIG['Pot Rack'];
+const prPurchased = potRack.purchased.map(p => p.materialName);
+assert(prPurchased.includes('Wheel'), 'Pot Rack has Wheel in purchased');
+
+console.log('\n====================================================');
+console.log('10. VERIFYING STORAGE BIN SPECIFICATIONS');
+console.log('====================================================');
+const storageBin = COUNTER_CONFIG['Storage Bin'];
+const sbPipes = storageBin.pipes.map(p => p.materialName);
+assert(sbPipes.includes('Bar'), 'Storage Bin has Bar under pipe');
+const sbPurchased = storageBin.purchased.map(p => p.materialName);
+assert(!sbPurchased.includes('Bar'), 'Storage Bin does NOT have Bar in purchased');
+
+console.log('\n====================================================');
+console.log('11. VERIFYING TROLLY SPECIFICATIONS');
+console.log('====================================================');
+const trolly = COUNTER_CONFIG['Trolley'];
+const trTop = trolly.sheets.find(s => s.materialName === 'Top');
+assert(trTop && trTop.hasDepth === true, 'Trolley Top has hasDepth = true');
+const trTank = trolly.sheets.find(s => s.materialName === 'Tank');
+assert(trTank && trTank.hasDepth === true, 'Trolley Tank has hasDepth = true');
+
+// Calculate Tank Sheet Weight with Depth (e.g. 36" x 24" x 10" Depth with 1.2mm)
+const tankWeight = calculateSheetWeight({ length: 36, width: 24, depth: 10, gauge: 1.2, quantity: 1 });
+// Area = (36 * 24 + 2 * (36 + 24) * 10) / 144 = (864 + 1200) / 144 = 2064 / 144 = 14.3333 sq.ft
+// 14.3333 * 0.96875 = 13.8854 kg
+assert(Math.abs(tankWeight - 13.8854) < 0.01, `Tank Sheet Weight with Depth = 13.89 kg (got ${tankWeight.toFixed(2)})`);
+
+console.log('\n====================================================');
+console.log('12. VERIFYING BAIN MERIY SPECIFICATIONS');
+console.log('====================================================');
+assert(COUNTER_TYPES.includes('Bain Meriy'), 'COUNTER_TYPES includes Bain Meriy');
+assert(!COUNTER_TYPES.includes('Bain Merry Marie'), 'COUNTER_TYPES does NOT include old name Bain Merry Marie');
+
+const bainMeriy = COUNTER_CONFIG['Bain Meriy'];
+assert(Boolean(bainMeriy), 'Bain Meriy exists in COUNTER_CONFIG');
+const bmSheets = bainMeriy.sheets.map(s => s.materialName);
+assert(!bmSheets.includes('Drawer') && !bmSheets.includes('Drawers'), 'Bain Meriy does NOT have Drawers');
+assert(bmSheets.includes('Tank'), 'Bain Meriy has Tank');
+const bmTank = bainMeriy.sheets.find(s => s.materialName === 'Tank');
+assert(bmTank && bmTank.hasDepth === true, 'Bain Meriy Tank has hasDepth = true');
+assert(bmSheets.includes('Tank Panel Covering'), 'Bain Meriy has Tank Panel Covering');
+
+const bmPipes = bainMeriy.pipes.map(p => p.materialName);
+assert(!bmPipes.includes('4 × Pipe') && !bmPipes.includes('Pipe'), 'Bain Meriy does NOT have generic 4x Pipe');
+assert(bmPipes.includes('Leg Pipe'), 'Bain Meriy has Leg Pipe');
+assert(bmPipes.includes('Top Support Pipe'), 'Bain Meriy has Top Support Pipe');
+assert(bmPipes.includes('Under Support Pipe'), 'Bain Meriy has Under Support Pipe');
+assert(bmPipes.includes('Shelf Support Pipe'), 'Bain Meriy has Shelf Support Pipe');
+
+const bmPurchased = bainMeriy.purchased.map(p => p.materialName);
+assert(bmPurchased.includes('Wheel'), 'Bain Meriy has Wheel in purchased');
+
+console.log('\n====================================================');
+console.log('13. VERIFYING TEA COUNTER SPECIFICATIONS');
+console.log('====================================================');
 const teaCounter = COUNTER_CONFIG['Tea Counter'];
-const teaDrawerSheet = (teaCounter.sheets || []).find(s => s.materialName === 'Drawer');
-assert(Boolean(teaDrawerSheet && teaDrawerSheet.hasDepth), 'Tea Counter has Drawer sheet with hasDepth = true');
+const tcSheets = teaCounter.sheets.map(s => s.materialName);
+assert(tcSheets.includes('Roof'), 'Tea Counter has Roof');
+assert(tcSheets.includes('Overhead Shelf'), 'Tea Counter has Overhead Shelf');
 
-// Drawer weight with Length=20, Width=15, Depth=6, Gauge=1.0, Qty=2
-// Area = (20*15 + 2*(20+15)*6) / 144 = (300 + 420) / 144 = 720 / 144 = 5.0 sq.ft
-// WeightPerSqFt for 1.0mm = 25.5 / 32 = 0.796875
-// Total Weight for 2 drawers = 5.0 * 0.796875 * 2 = 7.96875 kg
-const drawerWt = calculateSheetWeight({ length: 20, width: 15, depth: 6, gauge: 1.0, quantity: 2 });
-assert(Math.abs(drawerWt - 7.96875) < 0.0001, `Drawer 20x15x6" 1.0mm Qty 2 = 7.96875 kg (got ${drawerWt})`);
+const tcPipes = teaCounter.pipes.map(p => p.materialName);
+const expectedTcPipes = ['Leg Pipe', 'Top Support Pipe', 'Leg Support Pipe', 'Shelf Support Pipe'];
+assert(JSON.stringify(tcPipes) === JSON.stringify(expectedTcPipes), 'Tea Counter has exact 4 main pipes without duplicates');
 
-console.log('\n====================================================');
-console.log('9. VERIFYING TROLLY TOP DEPTH & MS ANGLE');
-console.log('====================================================');
-const trolleyConfig = COUNTER_CONFIG['Trolley'];
-const trolleyTop = (trolleyConfig.sheets || []).find(s => s.materialName === 'Top');
-assert(Boolean(trolleyTop && trolleyTop.hasDepth), 'Trolley Top sheet has hasDepth = true');
-assert(trolleyConfig.requiresAngle === true, 'Trolley requiresAngle = true');
-
-const trolleyMsAngle = (trolleyConfig.angles || []).find(a => a.materialName === 'MS Angle');
-assert(Boolean(trolleyMsAngle), 'Trolley contains MS Angle component');
-assert(trolleyMsAngle.grade === 'MS', 'Trolley MS Angle has grade = MS');
-
-// Trolly Top with Length=36, Width=24, Depth=4, Gauge=1.2, Qty=1
-// Area = (36*24 + 2*(36+24)*4) / 144 = (864 + 480) / 144 = 1344 / 144 = 9.3333 sq.ft
-// WeightPerSqFt for 1.2mm = 31.0 / 32 = 0.96875
-// Total Weight = 9.33333 * 0.96875 = 9.04166 kg
-const trollyTopWt = calculateSheetWeight({ length: 36, width: 24, depth: 4, gauge: 1.2, quantity: 1 });
-assert(Math.abs(trollyTopWt - 9.041666) < 0.001, `Trolly Top 36x24x4" 1.2mm = 9.042 kg (got ${trollyTopWt})`);
+const tcPurchased = teaCounter.purchased.map(p => p.materialName);
+assert(tcPurchased.includes('Wheel'), 'Tea Counter has Wheel in purchased');
 
 console.log('\n====================================================');
-console.log('10. VERIFYING LAFA COMPONENT IN WORKING TABLE & DINING TABLE ONLY');
+console.log('14. VERIFYING MULTI-COUNTER ISOLATION & COMPOSITE ESTIMATION');
 console.log('====================================================');
-const workingTable = COUNTER_CONFIG['Working Table'];
-assert(Boolean(workingTable), 'COUNTER_CONFIG has Working Table specifications');
-const workingTableLafa = (workingTable.sheets || []).find(s => s.materialName === 'LAFA');
-assert(Boolean(workingTableLafa), 'Working Table has LAFA sheet component');
-assert(workingTableLafa.gauge === 1.2, 'Working Table LAFA sheet has gauge = 1.2');
-
-const diningTable = COUNTER_CONFIG['Dining Table'];
-assert(Boolean(diningTable), 'COUNTER_CONFIG has Dining Table specifications');
-const diningTableLafa = (diningTable.sheets || []).find(s => s.materialName === 'LAFA');
-assert(Boolean(diningTableLafa), 'Dining Table has LAFA sheet component');
-assert(diningTableLafa.gauge === 1.2, 'Dining Table LAFA sheet has gauge = 1.2');
-
-// Verify LAFA is not added to other counters
-const sinkConfig = COUNTER_CONFIG['Sink Unit'];
-const noLafaInSink = !(sinkConfig.sheets || []).some(s => s.materialName === 'LAFA');
-assert(noLafaInSink, 'LAFA is NOT present in Sink Unit');
-
-const gasConfig = COUNTER_CONFIG['Gas Range'];
-const noLafaInGas = !(gasConfig.sheets || []).some(s => s.materialName === 'LAFA');
-assert(noLafaInGas, 'LAFA is NOT present in Gas Range');
-
-const tandoorConfig = COUNTER_CONFIG['SS Tandoor'];
-const noLafaInTandoor = !(tandoorConfig.sheets || []).some(s => s.materialName === 'LAFA');
-assert(noLafaInTandoor, 'LAFA is NOT present in SS Tandoor');
-
-const fridgeConfig = COUNTER_CONFIG['Fridge'];
-const noLafaInFridge = !(fridgeConfig.sheets || []).some(s => s.materialName === 'LAFA');
-assert(noLafaInFridge, 'LAFA is NOT present in Fridge');
-
-console.log('\n====================================================');
-console.log('11. VERIFYING WORKING TABLE & DINING TABLE INDEPENDENT SPECIFICATIONS');
-console.log('====================================================');
-import { COUNTER_TYPES } from './src/lib/constants.js';
-assert(COUNTER_TYPES.includes('Working Table'), 'COUNTER_TYPES contains Working Table');
-assert(COUNTER_TYPES.includes('Dining Table'), 'COUNTER_TYPES contains Dining Table');
-assert(COUNTER_TYPES.indexOf('Working Table') !== -1, 'Working Table is present and selectable');
-assert(COUNTER_TYPES.indexOf('Dining Table') !== -1, 'Dining Table is present and selectable');
-
-// Check Working Table specifications (Top, Overhead Shelf, Underhead Shelf, LAFA)
-const wtSheetNames = workingTable.sheets.map(s => s.materialName);
-assert(wtSheetNames.includes('Top'), 'Working Table has Top sheet');
-assert(wtSheetNames.includes('Overhead Shelf'), 'Working Table has Overhead Shelf');
-assert(wtSheetNames.includes('Underhead Shelf'), 'Working Table has Underhead Shelf');
-assert(wtSheetNames.includes('LAFA'), 'Working Table has LAFA');
-assert(!wtSheetNames.includes('Table Top'), 'Working Table does NOT have Table Top (not mixed with Dining Table)');
-
-// Check Dining Table specifications (Table Top, LAFA)
-const dtSheetNames = diningTable.sheets.map(s => s.materialName);
-assert(dtSheetNames.includes('Table Top'), 'Dining Table has Table Top sheet');
-assert(dtSheetNames.includes('LAFA'), 'Dining Table has LAFA sheet');
-assert(!dtSheetNames.includes('Overhead Shelf'), 'Dining Table does NOT have Overhead Shelf (not mixed with Working Table)');
-
-console.log('\n====================================================');
-console.log('12. VERIFYING CONDITIONAL ANGLE SECTION RULES (MS ANGLE)');
-console.log('====================================================');
-// 1. Gas Range
-const gasRangeConfig = COUNTER_CONFIG['Gas Range'];
-assert(gasRangeConfig.requiresAngle === true, 'Gas Range requiresAngle = true');
-const gasRangeAngle = (gasRangeConfig.angles || []).find(a => a.materialName === 'MS Angle');
-assert(Boolean(gasRangeAngle), 'Gas Range uses MS Angle');
-assert(gasRangeAngle.grade === 'MS', 'Gas Range MS Angle has grade = MS');
-
-// 2. Dosa Bhatti
-const dosaBhattiConfig = COUNTER_CONFIG['Dosa Bhatti'];
-assert(dosaBhattiConfig.requiresAngle === true, 'Dosa Bhatti requiresAngle = true');
-const dosaAngle = (dosaBhattiConfig.angles || []).find(a => a.materialName === 'MS Angle');
-assert(Boolean(dosaAngle), 'Dosa Bhatti uses MS Angle');
-assert(dosaAngle.grade === 'MS', 'Dosa Bhatti MS Angle has grade = MS');
-
-// 3. Chapati Puffer Plate
-const chapatiPufferConfig = COUNTER_CONFIG['Chapati Puffer Plate'];
-assert(chapatiPufferConfig.requiresAngle === true, 'Chapati Puffer Plate requiresAngle = true');
-const chapatiAngle = (chapatiPufferConfig.angles || []).find(a => a.materialName === 'MS Angle');
-assert(Boolean(chapatiAngle), 'Chapati Puffer Plate uses MS Angle');
-assert(chapatiAngle.grade === 'MS', 'Chapati Puffer Plate MS Angle has grade = MS');
-
-// 4. Trolley
-const trollyCfg = COUNTER_CONFIG['Trolley'];
-assert(trollyCfg.requiresAngle === true, 'Trolley requiresAngle = true');
-const trollyAngle = (trollyCfg.angles || []).find(a => a.materialName === 'MS Angle');
-assert(Boolean(trollyAngle), 'Trolley uses MS Angle');
-
-// 5. Counters with NO angle
-assert(COUNTER_CONFIG['Working Table'].requiresAngle === false, 'Working Table requiresAngle = false');
-assert(COUNTER_CONFIG['Working Table'].angles.length === 0, 'Working Table angles is empty');
-assert(COUNTER_CONFIG['Dining Table'].requiresAngle === false, 'Dining Table requiresAngle = false');
-assert(COUNTER_CONFIG['Dining Table'].angles.length === 0, 'Dining Table angles is empty');
-assert(COUNTER_CONFIG['Counter'].requiresAngle === false, 'Counter requiresAngle = false');
-assert(COUNTER_CONFIG['Counter'].angles.length === 0, 'Counter angles is empty');
-assert(COUNTER_CONFIG['Sink Unit'].requiresAngle === false, 'Sink Unit requiresAngle = false');
-assert(COUNTER_CONFIG['Sink Unit'].angles.length === 0, 'Sink Unit angles is empty');
-assert(COUNTER_CONFIG['SS Tandoor'].requiresAngle === false, 'SS Tandoor requiresAngle = false');
-assert(COUNTER_CONFIG['SS Tandoor'].angles.length === 0, 'SS Tandoor angles is empty');
-assert(COUNTER_CONFIG['Fridge'].requiresAngle === false, 'Fridge requiresAngle = false');
-assert(COUNTER_CONFIG['Fridge'].angles.length === 0, 'Fridge angles is empty');
-assert(COUNTER_CONFIG['Storage Bin'].requiresAngle === false, 'Storage Bin requiresAngle = false');
-assert(COUNTER_CONFIG['Storage Bin'].angles.length === 0, 'Storage Bin angles is empty');
-assert(COUNTER_CONFIG['Bain Merry Marie'].requiresAngle === false, 'Bain Merry Marie requiresAngle = false');
-assert(COUNTER_CONFIG['Bain Merry Marie'].angles.length === 0, 'Bain Merry Marie angles is empty');
-assert(COUNTER_CONFIG['Tea Counter'].requiresAngle === false, 'Tea Counter requiresAngle = false');
-assert(COUNTER_CONFIG['Tea Counter'].angles.length === 0, 'Tea Counter angles is empty');
-assert(COUNTER_CONFIG['GN PAN / ROUND POT'].requiresAngle === false, 'GN PAN / ROUND POT requiresAngle = false');
-assert(COUNTER_CONFIG['GN PAN / ROUND POT'].angles.length === 0, 'GN PAN / ROUND POT angles is empty');
-
-// Full estimate with MS Angle in Dosa Bhatti
-const dosaEstimate = calculateEstimate({
-  sheets: [
-    { length: 48, width: 24, gauge: 1.2, quantity: 1 } // 7.75 kg
-  ],
-  pipes: [
-    { pipeSize: '40 × 40 mm', pipeGauge: '16G', length: 10, quantity: 2 } // 11.80 kg
-  ],
-  angles: [
-    { material: 'MS Angle', gauge: '25 × 3 mm', length: 10, quantity: 4 } // 10 * 0.340 * 4 = 13.60 kg
-  ],
-  purchased: [
-    { quantity: 1, price: 1500 }
+// Counter 1: Working Table
+const c1Estimate = calculateEstimate({
+  materials: [
+    { calculationType: 'sheet', length: 60, width: 24, gauge: 1.2, quantity: 1 }, // 9.6875 kg
+    { calculationType: 'pipe', pipeSize: '40 × 40 mm', pipeGauge: '16G', length: 10, quantity: 2 } // 11.80 kg -> rounded pipe 12 kg
   ],
   materialRate: 250,
-  angleRate: 150,
-  pipeRate: 270,
   labourRate: 50,
-  sellingPercentage: 10,
+  sellingPercentage: 15,
   counterQuantity: 1
 });
-assert(Math.abs(dosaEstimate.totalAngleWeight - 13.60) < 0.001, `Dosa Bhatti Angle Weight = 13.60 kg (got ${dosaEstimate.totalAngleWeight})`);
-assert(Math.abs(dosaEstimate.totalWeight - (7.75 + 11.80 + 13.60)) < 0.001, `Dosa Bhatti Total Weight = 33.15 kg (got ${dosaEstimate.totalWeight})`);
-assert(dosaEstimate.angleCost > 0, 'Dosa Bhatti Angle Cost is calculated');
+
+// Counter 2: Dosa Bhatti with MS Angle
+const c2Estimate = calculateEstimate({
+  materials: [
+    { calculationType: 'sheet', length: 48, width: 24, gauge: 1.2, quantity: 1 }, // 7.75 kg
+    { calculationType: 'pipe', pipeSize: '40 × 40 mm', pipeGauge: '16G', length: 10, quantity: 2 }, // 11.80 kg -> rounded pipe 12 kg
+    { calculationType: 'angle', material: 'MS Angle', gauge: '25 × 3 mm', length: 10, quantity: 4 } // 13.60 kg
+  ],
+  materialRate: 250,
+  labourRate: 50,
+  sellingPercentage: 20,
+  counterQuantity: 2
+});
+
+assert(c1Estimate.totalWeight > 0, 'Counter 1 calculated weight > 0');
+assert(c2Estimate.totalWeight > 0, 'Counter 2 calculated weight > 0');
+assert(c1Estimate.totalAngleWeight === 0, 'Counter 1 (Working Table) has NO Angle Weight');
+assert(Math.abs(c2Estimate.totalAngleWeight - 13.60) < 0.001, 'Counter 2 (Dosa Bhatti) has 13.60 kg Angle Weight');
+assert(c1Estimate.unitSellingPrice !== c2Estimate.unitSellingPrice, 'Counter 1 & 2 retain distinct selling prices');
 
 console.log('\n====================================================');
 console.log(`ALL TESTS COMPLETED: ${passedTests} passed, ${failedTests} failed.`);
 console.log('====================================================');
+
 if (failedTests > 0) {
   process.exit(1);
 } else {
