@@ -557,7 +557,7 @@ export const COUNTER_TYPES_CONFIG = {
   },
   'Shawarma Cabin': {
     hasSubtypes: true,
-    subtypeLabel: 'Cabin Type',
+    subtypeLabel: 'Shawarma Cabin Type',
     subtypes: ['Table Top Shawarma Cabin', 'Half Shawarma Cabin', 'Full Shawarma Cabin'],
     aliases: ['Shawarma Cabin', 'Shawarma'],
     hasDepth: false,
@@ -566,18 +566,21 @@ export const COUNTER_TYPES_CONFIG = {
   'Table Top Shawarma Cabin': {
     hasSubtypes: false,
     subtypes: [],
+    aliases: ['Table Top Shawarma Cabin', 'Table Top Cabin', 'Table Top Shawarma'],
     hasDepth: false,
     requiresAngle: false
   },
   'Half Shawarma Cabin': {
     hasSubtypes: false,
     subtypes: [],
+    aliases: ['Half Shawarma Cabin', 'Half Cabin', 'Half Shawarma'],
     hasDepth: false,
     requiresAngle: false
   },
   'Full Shawarma Cabin': {
     hasSubtypes: false,
     subtypes: [],
+    aliases: ['Full Shawarma Cabin', 'Full Cabin', 'Full Shawarma'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -588,43 +591,6 @@ export const COUNTER_TYPES_CONFIG = {
     hasDepth: false,
     requiresAngle: true
   },
-  'Chapati Puffer Plate': {
-    hasDepth: false,
-    requiresAngle: true,
-    aliases: ['Chapati Plate', 'Puffer Plate'],
-    repeatableComponents: ['Under Shelf'],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Side Covering – Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Side Covering – Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'NCV Panel', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Burner Holding Stand', grade: '304', gauge: 1.0, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Panel Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
-    ],
-    angles: [
-      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
-    ],
-    purchased: [
-      { materialName: 'MS Plate', price: '', isRepeatable: false },
-      { materialName: 'Puffer Burner', price: '', isRepeatable: false },
-      { materialName: 'Puffer Plate', price: '', isRepeatable: false },
-      { materialName: 'Dosa Burner', price: '', dropdownOptions: DOSA_BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Mixing Tube', price: '', dropdownOptions: MIXING_TUBE_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: '', dropdownOptions: COPPER_PIPE_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
-      { materialName: 'NCV', price: '', isRepeatable: false },
-      { materialName: 'Bush', price: '', isRepeatable: false }
-    ]
-  },
-
   'Chapati Plate': {
     hasSubtypes: false,
     subtypes: [],
@@ -632,153 +598,6 @@ export const COUNTER_TYPES_CONFIG = {
     hasDepth: false,
     requiresAngle: true
   },
-  'Shawarma Cabin': {
-    hasDepth: false,
-    requiresAngle: false,
-    repeatableComponents: ['Under Shelf', 'Door', 'Drawer', 'Partition'],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
-      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Roof Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
-    ],
-    angles: [],
-    purchased: [
-      { materialName: 'Bush', price: '', isRepeatable: false },
-      { materialName: 'Motor', price: '', isRepeatable: false },
-      { materialName: 'Rotary Switch', price: '', isRepeatable: false },
-      { materialName: 'Switch', price: '', isRepeatable: false },
-      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Valve', price: '', isRepeatable: false },
-      { materialName: 'Wheel', price: '', isRepeatable: false },
-      { materialName: 'Spike / Skewer Rod', price: '', isRepeatable: false },
-      { materialName: 'Glass', price: '', isRepeatable: false }
-    ]
-  },
-
-  'Table Top Shawarma Cabin': {
-    hasDepth: false,
-    requiresAngle: false,
-    repeatableComponents: ['Partition', 'Door', 'Drawer'],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
-      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
-    ],
-    angles: [],
-    purchased: [
-      { materialName: 'Bush', price: '', isRepeatable: false },
-      { materialName: 'Motor', price: '', isRepeatable: false },
-      { materialName: 'Switch', price: '', isRepeatable: false },
-      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Spike / Skewer Rod', price: '', isRepeatable: false },
-      { materialName: 'Glass', price: '', isRepeatable: false }
-    ]
-  },
-
-  'Half Shawarma Cabin': {
-    hasDepth: false,
-    requiresAngle: false,
-    repeatableComponents: ['Under Shelf', 'Door', 'Drawer', 'Partition'],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Right Panel', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Left Panel', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Upper Back Side Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Under Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
-      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Roof Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
-    ],
-    angles: [],
-    purchased: [
-      { materialName: 'Bush', price: '', isRepeatable: false },
-      { materialName: 'Motor', price: '', isRepeatable: false },
-      { materialName: 'Rotary Switch', price: '', isRepeatable: false },
-      { materialName: 'Switch', price: '', isRepeatable: false },
-      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Valve', price: '', isRepeatable: false },
-      { materialName: 'Wheel', price: '', isRepeatable: false },
-      { materialName: 'Spike / Skewer Rod', price: '', isRepeatable: false },
-      { materialName: 'Glass', price: '', isRepeatable: false }
-    ]
-  },
-
-  'Full Shawarma Cabin': {
-    hasDepth: false,
-    requiresAngle: false,
-    repeatableComponents: ['Under Shelf', 'Door', 'Drawer', 'Partition'],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
-      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
-      { materialName: 'Roof Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
-    ],
-    angles: [],
-    purchased: [
-      { materialName: 'Bush', price: '', isRepeatable: false },
-      { materialName: 'Motor', price: '', isRepeatable: false },
-      { materialName: 'Rotary Switch', price: '', isRepeatable: false },
-      { materialName: 'Switch', price: '', isRepeatable: false },
-      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Valve', price: '', isRepeatable: false },
-      { materialName: 'Wheel', price: '', isRepeatable: false },
-      { materialName: 'Spike / Skewer Rod', price: '', isRepeatable: false },
-      { materialName: 'Glass', price: '', isRepeatable: false }
-    ]
-  },
-
   'SS Dish Rack': {
     hasSubtypes: false,
     subtypes: [],
@@ -1991,14 +1810,14 @@ export const COUNTER_CONFIG = {
  * Get configuration template for any counter type
  */
 export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype = '') {
-  if (!counterTypeOrSubtype) return { sheets: [], pipes: [], angles: [], purchased: [], compressor: [] };
+  if (!counterTypeOrSubtype && !explicitSubtype) return { sheets: [], pipes: [], angles: [], purchased: [], compressor: [] };
 
   const target = (explicitSubtype || counterTypeOrSubtype).trim();
   let configKey = target;
 
   if (!COUNTER_CONFIG[configKey]) {
     for (const [key, cfg] of Object.entries(COUNTER_CONFIG)) {
-      if (key === target || (cfg.aliases && cfg.aliases.includes(target))) {
+      if (key.toLowerCase() === target.toLowerCase() || (cfg.aliases && cfg.aliases.some(a => a.toLowerCase() === target.toLowerCase()))) {
         configKey = key;
         break;
       }
@@ -2007,49 +1826,50 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
 
   // Handle hierarchical / subtype names
   if (!COUNTER_CONFIG[configKey]) {
-    if (target.includes('Single Gas Range')) {
+    const tLower = target.toLowerCase();
+    if (tLower.includes('single gas') || tLower === 'single gas range') {
       configKey = 'Single Gas Range';
-    } else if (target.includes('Double Gas Range') || target.includes('2x Gas Range')) {
+    } else if (tLower.includes('double gas') || tLower.includes('2x gas') || tLower === 'double gas range') {
       configKey = 'Double Gas Range';
-    } else if (target.includes('Triple Gas Range')) {
+    } else if (tLower.includes('triple gas') || tLower === 'triple gas range') {
       configKey = 'Triple Gas Range';
-    } else if (target.includes('Four Gas Range')) {
+    } else if (tLower.includes('four gas') || tLower === 'four gas range') {
       configKey = 'Four Gas Range';
-    } else if (target.includes('Chinese Gas Range')) {
+    } else if (tLower.includes('chinese gas') || tLower === 'chinese gas range') {
       configKey = 'Chinese Gas Range';
-    } else if (target.includes('Table Top Shawarma')) {
+    } else if (tLower.includes('table top') && (tLower.includes('shawarma') || tLower.includes('cabin'))) {
       configKey = 'Table Top Shawarma Cabin';
-    } else if (target.includes('Half Shawarma')) {
+    } else if (tLower.includes('half') && (tLower.includes('shawarma') || tLower.includes('cabin'))) {
       configKey = 'Half Shawarma Cabin';
-    } else if (target.includes('Full Shawarma')) {
+    } else if (tLower.includes('full') && (tLower.includes('shawarma') || tLower.includes('cabin'))) {
       configKey = 'Full Shawarma Cabin';
-    } else if (target.includes('Vegetable Storage')) {
+    } else if (tLower.includes('vegetable storage')) {
       configKey = 'Vegetable Storage';
-    } else if (target.includes('Grain Storage')) {
+    } else if (tLower.includes('grain storage')) {
       configKey = 'Grain Storage';
-    } else if (target.includes('Vertical') || target.includes('Work Top') || target.includes('Fridge')) {
+    } else if (tLower.includes('vertical') || tLower.includes('work top') || tLower.includes('fridge')) {
       configKey = 'Fridge';
-    } else if (target.includes('Gas Range')) {
+    } else if (tLower.includes('gas range') || tLower === 'gas range') {
       configKey = 'Gas Range';
-    } else if (target.includes('Shawarma')) {
+    } else if (tLower.includes('shawarma') || tLower === 'shawarma cabin') {
       configKey = 'Shawarma Cabin';
-    } else if (target.includes('Chapati')) {
+    } else if (tLower.includes('chapati')) {
       configKey = 'Chapati Puffer Plate';
-    } else if (target.includes('Storage')) {
+    } else if (tLower.includes('storage')) {
       configKey = 'Storage Bin';
-    } else if (target.includes('Dining Table') || target.includes('Dining')) {
+    } else if (tLower.includes('dining table') || tLower.includes('dining')) {
       configKey = 'Dining Table';
-    } else if (target.includes('Stainless Steel Kitchen') || target.includes('Working Table') || (target.includes('Table') && !target.includes('Soiled') && !target.includes('Sink'))) {
+    } else if (tLower.includes('working table') || (tLower.includes('table') && !tLower.includes('soiled') && !tLower.includes('sink'))) {
       configKey = 'Working Table';
-    } else if (target.includes('Dish Rack')) {
+    } else if (tLower.includes('dish rack')) {
       configKey = 'SS Dish Rack';
-    } else if (target.includes('Bain Merry') || target.includes('Bain Marie')) {
-      configKey = 'Bain Merry Marie';
-    } else if (target.includes('Tea Counter')) {
+    } else if (tLower.includes('bain meriy') || tLower.includes('bain merry') || tLower.includes('bain marie')) {
+      configKey = 'Bain Meriy';
+    } else if (tLower.includes('tea counter')) {
       configKey = 'Tea Counter';
-    } else if (target.toLowerCase() === 'counter' || target.toLowerCase() === 'counters' || target.toLowerCase().startsWith('counter ') || target === 'Counter') {
+    } else if (tLower === 'counter' || tLower === 'counters' || tLower.startsWith('counter ')) {
       configKey = 'Counter';
-    } else if (target.includes('Round Pot') || target.includes('GN Pan') || target.includes('GN PAN')) {
+    } else if (tLower.includes('round pot') || tLower.includes('gn pan') || tLower.includes('gn pan / round pot')) {
       configKey = 'GN PAN / ROUND POT';
     }
   }

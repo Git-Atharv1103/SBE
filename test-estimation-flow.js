@@ -13,7 +13,8 @@ import {
   ANGLE_GAUGE_OPTIONS,
   COUNTER_CONFIG,
   COUNTER_TYPES,
-  COUNTER_TYPES_CONFIG
+  COUNTER_TYPES_CONFIG,
+  getFallbackCounterTemplate
 } from './src/lib/constants.js';
 
 import {
@@ -277,6 +278,57 @@ assert(c2Estimate.totalWeight > 0, 'Counter 2 calculated weight > 0');
 assert(c1Estimate.totalAngleWeight === 0, 'Counter 1 (Working Table) has NO Angle Weight');
 assert(Math.abs(c2Estimate.totalAngleWeight - 13.60) < 0.001, 'Counter 2 (Dosa Bhatti) has 13.60 kg Angle Weight');
 assert(c1Estimate.unitSellingPrice !== c2Estimate.unitSellingPrice, 'Counter 1 & 2 retain distinct selling prices');
+
+console.log('\n====================================================');
+console.log('15. VERIFYING GAS RANGE & SHAWARMA CABIN SUBTYPE SYSTEM');
+console.log('====================================================');
+// TEST 1: Gas Range Subtype Dropdown Data
+const grTypeCfg = COUNTER_TYPES_CONFIG['Gas Range'];
+assert(grTypeCfg && grTypeCfg.hasSubtypes === true, 'TEST 1: Gas Range has hasSubtypes = true');
+assert(grTypeCfg.subtypeLabel === 'Gas Range Type', 'TEST 1: Gas Range subtypeLabel is "Gas Range Type"');
+assert(Array.isArray(grTypeCfg.subtypes) && grTypeCfg.subtypes.length === 5, 'TEST 1: Gas Range has exactly 5 subtypes');
+assert(grTypeCfg.subtypes.includes('Chinese Gas Range'), 'TEST 1: Gas Range subtypes include Chinese Gas Range');
+
+// TEST 2: Select Chinese Gas Range -> Specifications Appear
+const chineseTemplate = getFallbackCounterTemplate('Gas Range', 'Chinese Gas Range');
+assert(chineseTemplate.sheets.length > 0, 'TEST 2: Chinese Gas Range has sheet specifications');
+assert(chineseTemplate.pipes.length > 0, 'TEST 2: Chinese Gas Range has pipe specifications');
+assert(chineseTemplate.angles.length > 0, 'TEST 2: Chinese Gas Range has MS Angle specification');
+const chinesePurchased = chineseTemplate.purchased.map(p => p.material);
+assert(chinesePurchased.includes('Chinese Gas Burner'), 'TEST 2: Chinese Gas Range has Chinese Gas Burner');
+assert(chinesePurchased.includes('Dom'), 'TEST 2: Chinese Gas Range has Dom');
+
+// TEST 3: Change Gas Range Subtype (Chinese Gas Range -> Double Gas Range)
+const doubleTemplate = getFallbackCounterTemplate('Gas Range', 'Double Gas Range');
+assert(doubleTemplate.purchased.length > 0, 'TEST 3: Double Gas Range loads clean specifications');
+assert(doubleTemplate.sheets.length === 10, 'TEST 3: Double Gas Range has its own configured 10 sheets');
+
+// TEST 4: Shawarma Cabin Subtype Dropdown Data
+const shTypeCfg = COUNTER_TYPES_CONFIG['Shawarma Cabin'];
+assert(shTypeCfg && shTypeCfg.hasSubtypes === true, 'TEST 4: Shawarma Cabin has hasSubtypes = true');
+assert(shTypeCfg.subtypeLabel === 'Shawarma Cabin Type', 'TEST 4: Shawarma Cabin subtypeLabel is "Shawarma Cabin Type"');
+assert(Array.isArray(shTypeCfg.subtypes) && shTypeCfg.subtypes.length === 3, 'TEST 4: Shawarma Cabin has 3 subtypes');
+
+// TEST 5: Select Half Cabin -> Half Cabin Specifications Appear
+const halfCabinTemplate = getFallbackCounterTemplate('Shawarma Cabin', 'Half Cabin');
+const halfCabinSheets = halfCabinTemplate.sheets.map(s => s.material);
+assert(halfCabinSheets.includes('Right Panel'), 'TEST 5: Half Cabin has Right Panel');
+assert(halfCabinSheets.includes('Left Panel'), 'TEST 5: Half Cabin has Left Panel');
+assert(halfCabinSheets.includes('Upper Back Side Covering'), 'TEST 5: Half Cabin has Upper Back Side Covering');
+assert(halfCabinTemplate.sheets.length === 14, 'TEST 5: Half Cabin has exactly 14 sheets');
+
+// TEST 6: Change Shawarma Subtype (Half Cabin -> Full Cabin)
+const fullCabinTemplate = getFallbackCounterTemplate('Shawarma Cabin', 'Full Shawarma Cabin');
+const fullCabinSheets = fullCabinTemplate.sheets.map(s => s.material);
+assert(!fullCabinSheets.includes('Right Panel'), 'TEST 6: Old Half Cabin Right Panel is cleared from Full Cabin');
+assert(!fullCabinSheets.includes('Left Panel'), 'TEST 6: Old Half Cabin Left Panel is cleared from Full Cabin');
+assert(fullCabinTemplate.sheets.length === 11, 'TEST 6: Full Cabin has exactly 11 sheets');
+
+// TEST 7: Non-Subtype Counters
+const bhattiCfg = COUNTER_TYPES_CONFIG['Dosa Bhatti'];
+assert(bhattiCfg && bhattiCfg.hasSubtypes === false, 'TEST 7: Dosa Bhatti has hasSubtypes = false');
+const tableCfg = COUNTER_TYPES_CONFIG['Working Table'];
+assert(tableCfg && tableCfg.hasSubtypes === false, 'TEST 7: Working Table has hasSubtypes = false');
 
 console.log('\n====================================================');
 console.log(`ALL TESTS COMPLETED: ${passedTests} passed, ${failedTests} failed.`);

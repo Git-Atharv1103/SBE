@@ -202,13 +202,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const currentCounterConfig = useMemo(() => {
     if (!clientData.counterType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
     const base = COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-    if (clientData.counterSubtype && COUNTER_TYPES_CONFIG[clientData.counterSubtype]) {
-      return {
-        ...base,
-        ...COUNTER_TYPES_CONFIG[clientData.counterSubtype]
-      };
-    }
-    return base;
+    const subtypeConfig = clientData.counterSubtype && COUNTER_TYPES_CONFIG[clientData.counterSubtype]
+      ? COUNTER_TYPES_CONFIG[clientData.counterSubtype]
+      : null;
+
+    return {
+      ...base,
+      hasDepth: subtypeConfig?.hasDepth !== undefined ? subtypeConfig.hasDepth : base.hasDepth,
+      requiresAngle: subtypeConfig?.requiresAngle !== undefined ? subtypeConfig.requiresAngle : base.requiresAngle,
+      // Retain parent hasSubtypes, subtypeLabel, and subtypes so the Subtype Dropdown stays visible and responsive
+      hasSubtypes: Boolean(base.hasSubtypes),
+      subtypeLabel: base.subtypeLabel || (clientData.counterType === 'Gas Range' ? 'Gas Range Type' : (clientData.counterType === 'Shawarma Cabin' ? 'Shawarma Cabin Type' : 'Counter Subtype')),
+      subtypes: base.subtypes || []
+    };
   }, [clientData.counterType, clientData.counterSubtype]);
 
   // Helper to check if a counter name is a Gas Range subtype
