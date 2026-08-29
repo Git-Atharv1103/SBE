@@ -226,8 +226,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const normalizeCounterName = (rawName) => {
     const clean = (rawName || '').trim();
     const lower = clean.toLowerCase();
-    if (lower === 'stainless steel kitchen') return 'Stainless Steel Kitchen';
-    if (lower === 'table' || lower === 'work table') return 'Working Table';
+    if (lower === 'stainless steel kitchen' || lower === 'table' || lower === 'work table' || lower === 'working table') return 'Working Table';
     if (lower === 'storage' || lower === 'storage bin') return 'Storage Bin';
     if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
     if (lower.includes('bain merry') || lower.includes('bain marie')) return 'Bain Merry Marie';
@@ -236,10 +235,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     return clean;
   };
 
-  // Helper to exclude all subtypes from the active main dropdown
+  // Helper to exclude all subtypes and legacy names from the active main dropdown
   const isExcludedFromActiveDropdown = (name) => {
     const n = (name || '').toLowerCase().trim();
     if (!n) return true;
+    if (n === 'stainless steel kitchen') return true;
     if (isGasRangeSubtype(n)) return true;
     if (n === 'vegetable storage' || n === 'grain storage' || n.includes('onion') || n.includes('potato')) return true;
     if (n === 'table top shawarma cabin' || n === 'half shawarma cabin' || n === 'full shawarma cabin') return true;

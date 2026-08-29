@@ -281,7 +281,7 @@ export function getItemSizeOptions(materialName) {
 // 4. MASTER COUNTER TYPES LIST (EXACT 20 FROM SPECIFICATION MASTER)
 // =========================================================================
 export const COUNTER_TYPES = [
-  'Stainless Steel Kitchen',
+  'Working Table',
   'Sink Unit',
   'Sink Unit with Table',
   'Soiled Dish Table',
@@ -295,7 +295,6 @@ export const COUNTER_TYPES = [
   'Dining Table',
   'Bench',
   'Storage Bin',
-  'Working Table',
   'Trolley',
   'Fridge',
   'Bain Merry Marie',
@@ -306,10 +305,17 @@ export const COUNTER_TYPES = [
 export const counterTypeOptions = COUNTER_TYPES;
 
 export const COUNTER_TYPES_CONFIG = {
-  'Stainless Steel Kitchen': {
+  'Working Table': {
     hasSubtypes: false,
     subtypes: [],
-    aliases: ['Stainless Steel Kitchen'],
+    aliases: ['Working Table', 'Table', 'Stainless Steel Kitchen', 'SS Kitchen', 'Work Table'],
+    hasDepth: false,
+    requiresAngle: false
+  },
+  'Table': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Working Table', 'Table', 'Stainless Steel Kitchen', 'SS Kitchen', 'Work Table'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -483,13 +489,6 @@ export const COUNTER_TYPES_CONFIG = {
     hasDepth: false,
     requiresAngle: false
   },
-  'Working Table': {
-    hasSubtypes: false,
-    subtypes: [],
-    aliases: ['Table', 'Work Table'],
-    hasDepth: false,
-    requiresAngle: false
-  },
   'Trolley': {
     hasSubtypes: false,
     subtypes: [],
@@ -548,7 +547,27 @@ export const COUNTER_TYPES_CONFIG = {
 // Exact Specifications from Section 19
 // =========================================================================
 export const COUNTER_CONFIG = {
-  'Stainless Steel Kitchen': {
+  'Working Table': {
+    hasDepth: false,
+    requiresAngle: false,
+    repeatableComponents: ['Overhead Shelf', 'Underhead Shelf'],
+    sheets: [
+      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
+      { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Underhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
+    ],
+    pipes: [
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
+      { materialName: 'Top Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
+      { materialName: 'Roof Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+    ],
+    angles: [],
+    purchased: [
+      { materialName: 'Bush', price: '', isRepeatable: false }
+    ]
+  },
+  'Table': {
     hasDepth: false,
     requiresAngle: false,
     repeatableComponents: ['Overhead Shelf', 'Underhead Shelf'],
@@ -1297,69 +1316,6 @@ export const COUNTER_CONFIG = {
     ]
   },
 
-  'Working Table': {
-    hasDepth: false,
-    requiresAngle: false,
-    repeatableComponents: [
-      'Under Shelf', 'Door', 'Drawer', 'Partition', 'Overhead Shelf',
-      'Overhead Shelf Door', 'Overhead Shelf Partition', 'Handle', 'Hinges', 'Lock',
-      'GN Pan', 'Round Pot', 'Burner', 'Copper Pipe', 'Mixing Tube', 'Dosa Burner'
-    ],
-    sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Side Covering – Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Side Covering – Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Overhead Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Top Covering Left', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Top Covering Right', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Top Covering Front', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Overhead Shelf Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Overhead Shelf Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Overhead Shelf Partition', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Tank', grade: '304', gauge: 1.2, isRepeatable: false }
-    ],
-    pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
-    ],
-    angles: [],
-    purchased: [
-      { materialName: 'Handle', price: '', isRepeatable: true },
-      { materialName: 'Hinges', price: '', isRepeatable: true },
-      { materialName: 'Glass', price: '', isRepeatable: false },
-      { materialName: 'GN Pan', price: '', dropdownOptions: GN_PAN_OPTIONS, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Round Pot', price: '', dropdownOptions: ROUND_POT_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Coil', price: '', isRepeatable: false },
-      { materialName: 'Switch', price: '', isRepeatable: false },
-      { materialName: 'Wire 3 Pin', price: '', isRepeatable: false },
-      { materialName: 'Patti Wal', price: '', isRepeatable: false },
-      { materialName: 'Wheel', price: '', isRepeatable: false },
-      { materialName: 'Bush', price: '', isRepeatable: false },
-      { materialName: 'Lock', price: '', isRepeatable: true },
-      { materialName: 'Dosa Plate', price: '', isRepeatable: false },
-      { materialName: 'Pan Support', price: '', isRepeatable: false },
-      { materialName: 'Casting', price: '', isRepeatable: false },
-      { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: '', dropdownOptions: COPPER_PIPE_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'NCV', price: '', isRepeatable: false },
-      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
-      { materialName: 'Mixing Tube', price: '', dropdownOptions: MIXING_TUBE_SIZES, allowMultiple: true, isRepeatable: true },
-      { materialName: 'Onion Cloth', price: '', isRepeatable: false },
-      { materialName: 'Dosa Burner', price: '', dropdownOptions: DOSA_BURNER_SIZES, allowMultiple: true, isRepeatable: true }
-    ]
-  },
-
   'Trolley': {
     hasDepth: false,
     requiresAngle: false,
@@ -1615,9 +1571,7 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       configKey = 'Chapati Puffer Plate';
     } else if (target.includes('Storage')) {
       configKey = 'Storage Bin';
-    } else if (target.includes('Stainless Steel Kitchen')) {
-      configKey = 'Stainless Steel Kitchen';
-    } else if (target.includes('Table') && !target.includes('Dining') && !target.includes('Soiled') && !target.includes('Sink')) {
+    } else if (target.includes('Stainless Steel Kitchen') || (target.includes('Table') && !target.includes('Dining') && !target.includes('Soiled') && !target.includes('Sink'))) {
       configKey = 'Working Table';
     } else if (target.includes('Dish Rack')) {
       configKey = 'SS Dish Rack';

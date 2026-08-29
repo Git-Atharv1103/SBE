@@ -77,7 +77,7 @@ export default function MaterialMaster() {
     allowMultiple: false,
     defaultUnitWeight: '',
     allowCustomUnitWeight: false,
-    counterTypes: ['Stainless Steel Kitchen'],
+    counterTypes: ['Working Table'],
     order: 0,
     unit: 'kg',
     price: '',
@@ -177,7 +177,7 @@ export default function MaterialMaster() {
       allowMultiple: false,
       defaultUnitWeight: '',
       allowCustomUnitWeight: false,
-      counterTypes: counterTypeFilter !== 'All' ? [counterTypeFilter] : ['Stainless Steel Kitchen'],
+      counterTypes: counterTypeFilter !== 'All' ? [counterTypeFilter] : ['Working Table'],
       order: 1,
       unit: 'kg',
       price: '',
@@ -967,7 +967,7 @@ export default function MaterialMaster() {
                     </div>
 
                     <p className="text-xs text-slate-500 mb-4 line-clamp-2 min-h-[32px]">
-                      {ct.description || 'Standard Stainless Steel Kitchen Commercial Counter'}
+                      {ct.description || 'Standard Working Table Commercial Counter'}
                     </p>
 
                     {/* Component Composition Tags */}
@@ -1493,7 +1493,7 @@ export default function MaterialMaster() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Stainless Steel Kitchen, Gas Range"
+                    placeholder="e.g. Working Table, Gas Range"
                     value={counterTypeFormData.name}
                     onChange={(e) => setCounterTypeFormData({ ...counterTypeFormData, name: e.target.value })}
                     className="w-full bg-white text-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none font-bold text-xs"
