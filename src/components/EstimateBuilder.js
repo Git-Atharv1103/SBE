@@ -43,7 +43,8 @@ import {
   DOSA_BURNER_SIZES,
   getItemSizeOptions,
   DEFAULT_GST_PERCENT,
-  getFallbackCounterTemplate
+  getFallbackCounterTemplate,
+  isPipeCombinationUnavailable
 } from '@/lib/constants';
 import {
   calculateSheetWeight,
@@ -85,7 +86,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     phone: '',
     email: '',
     address: '',
-    counterType: 'Working Table',
+    counterType: 'Dining Table',
     counterSubtype: '',
     counterQuantity: '1',
     estimateNumber: 'EST 01',
@@ -228,7 +229,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     const lower = clean.toLowerCase();
     if (lower === 'tea counter') return 'Tea Counter';
     if (lower === 'counter' || lower === 'counters') return 'Counter';
-    if (lower === 'stainless steel kitchen' || lower === 'table' || lower === 'work table' || lower === 'working table') return 'Working Table';
+    if (lower === 'dining table') return 'Dining Table';
+    if (lower === 'working table' || lower === 'table' || lower === 'work table' || lower === 'stainless steel kitchen') return 'Working Table';
     if (lower === 'storage' || lower === 'storage bin') return 'Storage Bin';
     if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
     if (lower.includes('bain merry') || lower.includes('bain marie')) return 'Bain Merry Marie';
@@ -236,6 +238,24 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     if (lower === 'dish rack') return 'SS Dish Rack';
     return clean;
   };
+
+  const isTrollyType = useMemo(() => {
+    return (clientData.counterType || '').toLowerCase().includes('troll');
+  }, [clientData.counterType]);
+
+  const isRowDepthRequired = useCallback((row) => {
+    if (!row) return false;
+    if (row.hasDepth) return true;
+    const mat = (row.material || '').toLowerCase();
+    if (mat.includes('drawer')) return true;
+    if (mat.includes('sink') || mat.includes('bowl')) return true;
+    if (isTrollyType && mat.includes('top')) return true;
+    return false;
+  }, [isTrollyType]);
+
+  const hasAnyDepthInSheets = useMemo(() => {
+    return sheets.some(s => isRowDepthRequired(s));
+  }, [sheets, isRowDepthRequired]);
 
   // Helper to exclude all subtypes and legacy names from the active main dropdown
   const isExcludedFromActiveDropdown = (name) => {
@@ -348,7 +368,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   // Initialize or Reopen Project
   useEffect(() => {
     if (projectToEdit) {
-      const cType = projectToEdit.counterType === 'Table' ? 'Working Table' : (projectToEdit.counterType || 'Working Table');
+      const cType = projectToEdit.counterType === 'Working Table' || projectToEdit.counterType === 'Table' ? 'Dining Table' : (projectToEdit.counterType || 'Dining Table');
       setClientData({
         customerName: projectToEdit.customerName || '',
         companyName: projectToEdit.companyName || '',
@@ -618,7 +638,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     } else if (type === 'PIPE') {
       setPipes(prev => [
         ...prev,
-        { id: newId, material: '', calculationType: 'pipe', grade: '304', pipeSize: '1.5" (38 × 38 mm)', pipeGauge: '1.2 mm', length: '', unit: 'ft', quantity: '', isRepeatable: true }
+        { id: newId, material: '', calculationType: 'pipe', grade: '304', pipeSize: '40 × 40 mm', pipeGauge: '16G', length: '', unit: 'ft', quantity: '', isRepeatable: true }
       ]);
     } else if (type === 'ANGLE') {
       setAngles(prev => [
@@ -657,6 +677,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           width: '',
           depth: currentCounterConfig.hasDepth ? '' : undefined,
           gauge: mat.gauge || 1.2,
+          gaugeOptions: mat.gaugeOptions || null,
           quantity: '',
           unit: 'inch',
           isRepeatable: true
@@ -671,8 +692,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           material: mat.materialName,
           calculationType: 'pipe',
           grade: mat.grade ? String(mat.grade).replace(/^SS/i, '') : '304',
-          pipeSize: mat.pipeSize || '1.5" (38 × 38 mm)',
-          pipeGauge: mat.gauge || '1.2 mm',
+          pipeSize: mat.pipeSize || '40 × 40 mm',
+          pipeGauge: mat.pipeGauge || mat.gauge || '16G',
           length: '',
           unit: 'ft',
           quantity: '',
@@ -749,7 +770,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       phone: '',
       email: '',
       address: '',
-      counterType: 'Working Table',
+      counterType: 'Dining Table',
       counterSubtype: '',
       counterQuantity: '1',
       estimateNumber: nextNum,
@@ -766,7 +787,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       gst: '',
       discount: ''
     });
-    loadMaterialsForCounterType('Working Table', '');
+    loadMaterialsForCounterType('Dining Table', '');
     setCurrentStep(1);
     showStatus('success', `Reset workspace for New Counter Estimate (${nextNum}).`);
   };
@@ -1417,7 +1438,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                           <th className="py-2.5 px-3 w-28">Grade</th>
                           <th className="py-2.5 px-3 w-24">Length (in)</th>
                           <th className="py-2.5 px-3 w-24">Width / Height (in)</th>
-                          {currentCounterConfig.hasDepth && (
+                          {hasAnyDepthInSheets && (
                             <th className="py-2.5 px-3 w-24 bg-blue-50/50 text-blue-900">Depth (in)</th>
                           )}
                           <th className="py-2.5 px-3 w-36">Gauge</th>
@@ -1432,7 +1453,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                           const rowWeight = calculateRowWeight(row);
                           const currentGrade = row.grade ? String(row.grade).replace(/^SS/i, '') : '304';
                           const hasCustomGaugeOpts = Array.isArray(row.gaugeOptions) && row.gaugeOptions.length > 0;
-                          const isCovering = (row.material || '').toLowerCase().includes('covering');
+                          const isCovering = (row.material || '').toLowerCase().includes('covering') && !(row.material || '').toLowerCase().includes('drawer');
 
                           return (
                             <tr key={row.id || idx} className="hover:bg-teal-50/30 transition-colors">
@@ -1485,9 +1506,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs text-right font-semibold"
                                 />
                               </td>
-                              {currentCounterConfig.hasDepth && (
+                              {hasAnyDepthInSheets && (
                                 <td className="py-2 px-3 bg-blue-50/20">
-                                  {(row.material || '').toLowerCase().includes('sink') || (row.material || '').toLowerCase().includes('bowl') ? (
+                                  {isRowDepthRequired(row) ? (
                                     <input
                                       type="number"
                                       step="any"
@@ -1627,8 +1648,9 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                         {pipes.map((row, idx) => {
                           const rowWeight = calculateRowWeight(row);
                           const currentGrade = row.grade ? String(row.grade).replace(/^SS/i, '') : '304';
-                          const currentSize = row.pipeSize || row.size || '1.5" (38 × 38 mm)';
-                          const currentGauge = row.pipeGauge || row.gauge || '1.2 mm';
+                          const currentSize = row.pipeSize || row.size || '40 × 40 mm';
+                          const currentGauge = row.pipeGauge || row.gauge || '16G';
+                          const isUnavailable = isPipeCombinationUnavailable(currentSize, currentGauge);
 
                           return (
                             <tr key={row.id || idx} className="hover:bg-sky-50/30 transition-colors">
@@ -1709,7 +1731,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 />
                               </td>
                               <td className="py-2 px-3 text-right font-black text-sky-700">
-                                {formatWeight(rowWeight)}
+                                {isUnavailable ? (
+                                  <span className="text-[10px] text-amber-600 font-semibold italic block leading-tight" title="Weight unavailable for this size/gauge combination">
+                                    Weight unavailable for this size/gauge combination
+                                  </span>
+                                ) : (
+                                  formatWeight(rowWeight)
+                                )}
                               </td>
                               <td className="py-2 px-2 text-center">
                                 <div className="flex items-center justify-center gap-1">
@@ -1740,13 +1768,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 )}
               </div>
 
-              {/* 3. ANGLE MATERIALS TABLE (CONDITIONAL: ONLY SHOWN IF REQUIRES ANGLE, E.G. GAS RANGE) */}
-              {currentCounterConfig.requiresAngle && (
+              {/* 3. ANGLE MATERIALS TABLE (CONDITIONAL: ONLY SHOWN IF REQUIRES ANGLE OR HAS ANGLES) */}
+              {(currentCounterConfig.requiresAngle || angles.length > 0) && (
                 <div className="card-3d p-5 w-full border-amber-200/80 bg-linear-to-b from-white to-amber-50/10 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-2xs"></span>
-                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Angle Materials</h3>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Angle Material</h3>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
@@ -1780,9 +1808,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
                           <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
-                            <th className="py-2.5 px-3">Material</th>
-                            <th className="py-2.5 px-3 w-48">Gauge</th>
-                            <th className="py-2.5 px-3 w-28 text-right">Length (ft)</th>
+                            <th className="py-2.5 px-3">Material Name</th>
+                            <th className="py-2.5 px-3 w-48">Angle Size</th>
+                            <th className="py-2.5 px-3 w-28 text-right">Length</th>
+                            <th className="py-2.5 px-3 text-center w-16">Unit</th>
                             <th className="py-2.5 px-3 w-24 text-right">Quantity</th>
                             <th className="py-2.5 px-3 text-right w-28">Weight</th>
                             <th className="py-2.5 px-2 text-center w-20">Actions</th>
@@ -1796,8 +1825,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                 <td className="py-2 px-3">
                                   <input
                                     type="text"
-                                    placeholder="Angle Material Name"
-                                    value={row.material || ''}
+                                    placeholder="Material Name"
+                                    value={row.material || 'MS Angle'}
                                     onChange={(e) => updateAngleRow(idx, 'material', e.target.value)}
                                     className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 focus:outline-none text-xs font-semibold"
                                   />
@@ -1818,11 +1847,14 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                     type="number"
                                     step="any"
                                     min="0"
-                                    placeholder="Length (ft)"
+                                    placeholder="Length"
                                     value={row.length !== undefined && row.length !== null ? row.length : ''}
                                     onChange={(e) => updateAngleRow(idx, 'length', sanitizeNumericInput(e.target.value))}
                                     className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-semibold"
                                   />
+                                </td>
+                                <td className="py-2 px-3 text-center text-slate-400 font-bold">
+                                  {row.unit || 'ft'}
                                 </td>
                                 <td className="py-2 px-3">
                                   <input
@@ -2152,7 +2184,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   Selected Equipment
                 </span>
                 <span className="text-sm font-black text-slate-900 block mt-0.5">
-                  {clientData.counterType || 'Working Table'}
+                  {clientData.counterType || 'Dining Table'}
                   {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
                 </span>
               </div>
@@ -2401,7 +2433,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   Counter Name
                 </span>
                 <span className="text-sm font-black text-slate-900 block">
-                  {clientData.counterType || 'Working Table'}
+                  {clientData.counterType || 'Dining Table'}
                   {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium mt-1">Stainless Steel Commercial Unit</span>

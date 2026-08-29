@@ -17,10 +17,11 @@ import {
  * Formula:
  * 1. Area in square feet: Area = (Length in inches × Width in inches) / 144
  * 2. Weight per sq.ft = Reference Weight / 32
- *    - 1.3 mm: 39 kg / 32 = 1.21875 kg/sq.ft
+ *    - 1.5 mm: 39 kg / 32 = 1.21875 kg/sq.ft
  *    - 1.2 mm: 31 kg / 32 = 0.96875 kg/sq.ft
  *    - 1.0 mm: 25.5 kg / 32 = 0.796875 kg/sq.ft
  *    - 0.8 mm: 20 kg / 32 = 0.625 kg/sq.ft
+ *    - 0.6 mm: 15.5 kg / 32 = 0.484375 kg/sq.ft
  * 3. Total Weight = Area in sq.ft × Weight per sq.ft × Quantity
  * 
  * @param {Object|number|string} arg1 - Options object or length in inches
@@ -81,14 +82,15 @@ export function calculateSheetWeight(arg1, arg2, arg3, arg4) {
 }
 
 /**
- * Universal Pipe Weight Calculation (Workshop kg-per-foot method)
+ * Universal Pipe Weight Calculation (20 FT Master Chart Method)
  * 
  * Formula:
- * Weight = Length (ft) × WeightPerFoot(Pipe Gauge) × Quantity
- * If unit is inch, Length in ft = Length / 12
+ * weightForLength = referenceWeight20ft × enteredLengthInFeet / 20
+ * totalWeight = weightForLength × quantity
+ * If unit is inch, enteredLengthInFeet = enteredInches / 12
  * 
  * @param {Object|number|string} arg1 - Options object or length in ft/inch
- * @param {string} [arg2] - Pipe size description / ID / Pipe Gauge
+ * @param {string} [arg2] - Pipe size description
  * @param {number|string} [arg3] - Quantity
  * @returns {number} Calculated weight in kg (floating point)
  */
@@ -97,14 +99,14 @@ export function calculatePipeWeight(arg1, arg2, arg3) {
 
   if (typeof arg1 === 'object' && arg1 !== null) {
     if (arg1.length === '' || arg1.length === null || arg1.length === undefined ||
-        (!arg1.pipeSize && !arg1.pipeGauge && !arg1.gauge) ||
+        (!arg1.pipeSize && !arg1.pipeGauge && !arg1.gauge && !arg1.size) ||
         arg1.quantity === '' || arg1.quantity === null || arg1.quantity === undefined) {
       return 0;
     }
     l = parseFloat(arg1.length);
     unit = (arg1.unit || 'ft').toLowerCase().trim();
-    pipeSize = arg1.pipeSize || '1.5" (38 × 38 mm)';
-    pipeGauge = arg1.pipeGauge || arg1.gauge || '';
+    pipeSize = arg1.pipeSize || arg1.size || '40 × 40 mm';
+    pipeGauge = arg1.pipeGauge || arg1.gauge || '16G';
     q = parseFloat(arg1.quantity);
   } else {
     if (arg1 === '' || arg1 === null || arg1 === undefined ||
@@ -114,8 +116,8 @@ export function calculatePipeWeight(arg1, arg2, arg3) {
     }
     l = parseFloat(arg1);
     unit = 'ft';
-    pipeSize = arg2 || '1.5" (38 × 38 mm)';
-    pipeGauge = arg2 || '';
+    pipeSize = arg2 || '40 × 40 mm';
+    pipeGauge = '16G';
     q = parseFloat(arg3);
   }
 

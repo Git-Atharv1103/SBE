@@ -33,6 +33,8 @@ import {
   STAINLESS_STEEL_GRADES, 
   STANDARD_GAUGES, 
   PIPE_MASTER,
+  PIPE_GAUGE_OPTIONS,
+  PIPE_SIZE_OPTIONS,
   ANGLE_MASTER,
   ANGLE_GAUGE_OPTIONS,
   COUNTER_TYPES,
@@ -73,11 +75,12 @@ export default function MaterialMaster() {
     gauge: '',
     gaugeOptions: '',
     pipeSize: '',
+    pipeGauge: '',
     dropdownOptions: '',
     allowMultiple: false,
     defaultUnitWeight: '',
     allowCustomUnitWeight: false,
-    counterTypes: ['Working Table'],
+    counterTypes: ['Dining Table'],
     order: 0,
     unit: 'kg',
     price: '',
@@ -173,11 +176,12 @@ export default function MaterialMaster() {
       gauge: '',
       gaugeOptions: '',
       pipeSize: '',
+      pipeGauge: '',
       dropdownOptions: '',
       allowMultiple: false,
       defaultUnitWeight: '',
       allowCustomUnitWeight: false,
-      counterTypes: counterTypeFilter !== 'All' ? [counterTypeFilter] : ['Working Table'],
+      counterTypes: counterTypeFilter !== 'All' ? [counterTypeFilter] : ['Dining Table'],
       order: 1,
       unit: 'kg',
       price: '',
@@ -200,6 +204,7 @@ export default function MaterialMaster() {
       gauge: mat.gauge !== undefined && mat.gauge !== null ? String(mat.gauge) : '',
       gaugeOptions: Array.isArray(mat.gaugeOptions) ? mat.gaugeOptions.join(', ') : '',
       pipeSize: mat.pipeSize || '',
+      pipeGauge: mat.pipeGauge || mat.gauge || '',
       dropdownOptions: Array.isArray(mat.dropdownOptions) ? mat.dropdownOptions.join(', ') : (Array.isArray(mat.options) ? mat.options.join(', ') : ''),
       allowMultiple: Boolean(mat.allowMultiple),
       defaultUnitWeight: mat.defaultUnitWeight !== undefined && mat.defaultUnitWeight !== null ? String(mat.defaultUnitWeight) : '',
@@ -286,9 +291,10 @@ export default function MaterialMaster() {
         grade: productFormData.grade ? String(productFormData.grade).replace(/^SS/i, '') : '304',
         gauge: productFormData.category === 'Angle' 
           ? (productFormData.gauge || '25 × 3 mm')
-          : (productFormData.category === 'Sheet' && productFormData.gauge !== '' ? parseFloat(productFormData.gauge) : ''),
+          : (productFormData.category === 'Pipe' ? (productFormData.pipeGauge || productFormData.gauge || '16G') : (productFormData.category === 'Sheet' && productFormData.gauge !== '' ? parseFloat(productFormData.gauge) : '')),
         gaugeOptions: parsedGaugeOpts && parsedGaugeOpts.length > 0 ? parsedGaugeOpts : null,
         pipeSize: productFormData.category === 'Pipe' ? productFormData.pipeSize : '',
+        pipeGauge: productFormData.category === 'Pipe' ? (productFormData.pipeGauge || productFormData.gauge || '16G') : '',
         dropdownOptions: parsedDropdownOpts && parsedDropdownOpts.length > 0 ? parsedDropdownOpts : null,
         allowMultiple: Boolean(productFormData.allowMultiple),
         defaultUnitWeight: null,
@@ -967,7 +973,7 @@ export default function MaterialMaster() {
                     </div>
 
                     <p className="text-xs text-slate-500 mb-4 line-clamp-2 min-h-[32px]">
-                      {ct.description || 'Standard Working Table Commercial Counter'}
+                      {ct.description || 'Standard Dining Table Commercial Counter'}
                     </p>
 
                     {/* Component Composition Tags */}
@@ -1163,17 +1169,17 @@ export default function MaterialMaster() {
                         >
                           <option value="">-- No Default Gauge --</option>
                           {STANDARD_GAUGES.map(g => (
-                            <option key={g.value} value={g.value}>{g.label} ({g.weightPerSqFt} kg/sq.ft)</option>
+                            <option key={g.value} value={g.value}>{g.label}</option>
                           ))}
                         </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                          Custom Gauge Options (e.g. 0.6, 0.8)
+                          Custom Gauge Options (e.g. 0.6, 0.8, 1, 1.2, 1.5)
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. 0.6, 0.8 (comma-separated)"
+                          placeholder="e.g. 0.6, 0.8, 1.0, 1.2, 1.5 (comma-separated)"
                           value={productFormData.gaugeOptions}
                           onChange={(e) => setProductFormData({ ...productFormData, gaugeOptions: e.target.value })}
                           className="w-full bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:outline-none text-xs"
@@ -1192,21 +1198,33 @@ export default function MaterialMaster() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                          Default Pipe Gauge (Optional)
+                          Default Pipe Size (Optional)
                         </label>
                         <select
                           value={productFormData.pipeSize}
                           onChange={(e) => setProductFormData({ ...productFormData, pipeSize: e.target.value })}
                           className="w-full bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-cyan-500 focus:outline-none text-xs font-medium"
                         >
-                          <option value="">-- Select Pipe Gauge --</option>
-                          {PIPE_MASTER.map(p => (
-                            <option key={p.id} value={p.label}>{p.label} ({p.weightPerFoot} kg/ft)</option>
+                          <option value="">-- Select Pipe Size --</option>
+                          {PIPE_SIZE_OPTIONS.map(ps => (
+                            <option key={ps} value={ps}>{ps}</option>
                           ))}
                         </select>
                       </div>
-                      <div className="flex items-center text-[10px] text-slate-600 pt-3 sm:pt-4">
-                        <span className="italic">Length in feet will be entered in Project Estimate.</span>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Default Pipe Gauge (Optional)
+                        </label>
+                        <select
+                          value={productFormData.pipeGauge || productFormData.gauge}
+                          onChange={(e) => setProductFormData({ ...productFormData, pipeGauge: e.target.value, gauge: e.target.value })}
+                          className="w-full bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-cyan-500 focus:outline-none text-xs font-medium"
+                        >
+                          <option value="">-- Select Pipe Gauge --</option>
+                          {PIPE_GAUGE_OPTIONS.map(pg => (
+                            <option key={pg} value={pg}>{pg}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1493,7 +1511,7 @@ export default function MaterialMaster() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Working Table, Gas Range"
+                    placeholder="e.g. Dining Table, Gas Range"
                     value={counterTypeFormData.name}
                     onChange={(e) => setCounterTypeFormData({ ...counterTypeFormData, name: e.target.value })}
                     className="w-full bg-white text-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 focus:outline-none font-bold text-xs"

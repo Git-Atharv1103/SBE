@@ -7,26 +7,32 @@
 export const BASELINE_SHEET_SQFT = 32;
 
 // Gauge Reference Weights (Standard Weight per 32 sq.ft sheet in kg)
+// Only Sheet Gauges: 0.6 mm, 0.8 mm, 1.0 mm, 1.2 mm, 1.5 mm
 export const GAUGE_WEIGHTS_32SQFT = {
-  '1.3': 39.0,
+  '1.5': 39.0,
   '1.2': 31.0,
   '1.0': 25.5,
+  '1': 25.5,
   '0.8': 20.0,
-  '0.6': 15.5
+  '0.6': 15.5,
+  '1.3': 39.0 // Legacy fallback
 };
 
 // Numeric helper for gauge weight
 export const GAUGE_WEIGHTS = {
-  1.3: 39.0,
+  1.5: 39.0,
   1.2: 31.0,
   1.0: 25.5,
+  1: 25.5,
   0.8: 20.0,
-  0.6: 15.5
+  0.6: 15.5,
+  1.3: 39.0 // Legacy fallback
 };
 
 /**
  * Get weight of a standard 32 sq.ft sheet for a given gauge in mm
- * @param {number|string} gauge - Gauge in mm (e.g. 1.2, '1.2', 1.0, 0.8, 0.6)
+ * Supported Sheet Gauges: 0.6, 0.8, 1.0, 1.2, 1.5 mm
+ * @param {number|string} gauge - Gauge in mm (e.g. 0.6, 0.8, 1, 1.2, 1.5)
  * @returns {number} Standard weight in kg for 32 sq.ft
  */
 export function getStandardSheetWeight(gauge) {
@@ -35,7 +41,7 @@ export function getStandardSheetWeight(gauge) {
     return GAUGE_WEIGHTS_32SQFT[gStr];
   }
   const gNum = parseFloat(gauge);
-  if (gNum >= 1.25) return 39.0;
+  if (gNum >= 1.35) return 39.0;
   if (gNum >= 1.1) return 31.0;
   if (gNum >= 0.9) return 25.5;
   if (gNum >= 0.7) return 20.0;
@@ -49,172 +55,295 @@ export function getGaugeWeightPerSqFt(gauge) {
 
 export const DEFAULT_GST_PERCENT = 18;
 
-// Available Sheet Gauge Options
+// Available Sheet Gauge Options (Strictly 0.6, 0.8, 1, 1.2, 1.5 mm ONLY)
 export const SHEET_GAUGE_OPTIONS = [
-  { value: 1.3, label: '1.3 mm (39.0 kg / 32 sq.ft)' },
-  { value: 1.2, label: '1.2 mm (31.0 kg / 32 sq.ft)' },
-  { value: 1.0, label: '1.0 mm (25.5 kg / 32 sq.ft)' },
-  { value: 0.8, label: '0.8 mm (20.0 kg / 32 sq.ft)' },
-  { value: 0.6, label: '0.6 mm (15.5 kg / 32 sq.ft)' }
+  { value: 0.6, label: '0.6 mm', weightPerSqFt: 0.484375 },
+  { value: 0.8, label: '0.8 mm', weightPerSqFt: 0.625 },
+  { value: 1.0, label: '1 mm', weightPerSqFt: 0.796875 },
+  { value: 1.2, label: '1.2 mm', weightPerSqFt: 0.96875 },
+  { value: 1.5, label: '1.5 mm', weightPerSqFt: 1.21875 }
 ];
 
-export const SHEET_GAUGES = [1.3, 1.2, 1.0, 0.8, 0.6];
+export const SHEET_GAUGES = [0.6, 0.8, 1.0, 1.2, 1.5];
 
 // Strict Sheet Grades
 export const SHEET_GRADES = ['202', '304', '316'];
 
 // =========================================================================
-// 2. PIPE MASTER CONFIGURATION & WEIGHT TABLES
-// Formula: Weight = Length (ft) × WeightPerFoot × Quantity
-// Pipe Gauge Options: 1.0 mm, 1.2 mm, 1.5 mm, 2.0 mm
+// 2. PIPE MASTER CONFIGURATION & WEIGHT TABLES (20 FT Master Chart)
+// Formula:
+// weightForLength = referenceWeight20ft × enteredLengthInFeet / 20
+// totalWeight = weightForLength × quantity
+// If entered length in inches: enteredLengthInFeet = enteredInches / 12
+// Pipe Gauge Options: '18G', '16G', '14G'
 // =========================================================================
-export const PIPE_GAUGE_OPTIONS = ['1.0 mm', '1.2 mm', '1.5 mm', '2.0 mm'];
+export const PIPE_GAUGE_OPTIONS = ['18G', '16G', '14G'];
 
 export const PIPE_MASTER = [
+  // SQUARE PIPES (Top)
   {
-    id: 'sq-1.0',
+    id: 'sq-12',
     type: 'Square Pipe',
-    size: '1" (25 × 25 mm)',
-    outerDimensionMm: 25,
-    gaugeWeights: {
-      '1.0 mm': 0.230,
-      '1.2 mm': 0.270,
-      '1.5 mm': 0.330,
-      '2.0 mm': 0.420
+    size: '12 × 12 mm',
+    aliases: ['12 × 12 mm', '12x12 mm', '12 × 12', '12x12'],
+    weights20ft: {
+      '18G': 2.80,
+      '16G': 3.50,
+      '14G': 4.70
     }
   },
   {
-    id: 'sq-1.25',
+    id: 'sq-16',
     type: 'Square Pipe',
-    size: '1.25" (32 × 32 mm)',
-    outerDimensionMm: 32,
-    gaugeWeights: {
-      '1.0 mm': 0.290,
-      '1.2 mm': 0.340,
-      '1.5 mm': 0.420,
-      '2.0 mm': 0.540
+    size: '16 × 16 mm',
+    aliases: ['16 × 16 mm', '16x16 mm', '16 × 16', '16x16'],
+    weights20ft: {
+      '18G': 3.70,
+      '16G': 4.70,
+      '14G': 6.25
     }
   },
   {
-    id: 'sq-1.5',
+    id: 'sq-20',
     type: 'Square Pipe',
-    size: '1.5" (38 × 38 mm)',
-    outerDimensionMm: 38,
-    gaugeWeights: {
-      '1.0 mm': 0.350,
-      '1.2 mm': 0.410,
-      '1.5 mm': 0.510,
-      '2.0 mm': 0.660
+    size: '20 × 20 mm',
+    aliases: ['20 × 20 mm', '20x20 mm', '20 × 20', '20x20'],
+    weights20ft: {
+      '18G': 4.70,
+      '16G': 5.85,
+      '14G': 7.80
     }
   },
   {
-    id: 'sq-2.0',
+    id: 'sq-25',
     type: 'Square Pipe',
-    size: '2" (50 × 50 mm)',
-    outerDimensionMm: 50,
-    gaugeWeights: {
-      '1.0 mm': 0.470,
-      '1.2 mm': 0.550,
-      '1.5 mm': 0.680,
-      '2.0 mm': 0.890
+    size: '25 × 25 mm',
+    aliases: ['25 × 25 mm', '25x25 mm', '25 × 25', '25x25', '1" (25 × 25 mm)', '1"'],
+    weights20ft: {
+      '18G': 5.80,
+      '16G': 7.30,
+      '14G': 9.80
     }
   },
   {
-    id: 'rec-1x0.5',
+    id: 'sq-30',
+    type: 'Square Pipe',
+    size: '30 × 30 mm',
+    aliases: ['30 × 30 mm', '30x30 mm', '30 × 30', '30x30', '1.25" (32 × 32 mm)', '32 × 32 mm'],
+    weights20ft: {
+      '18G': 7.00,
+      '16G': 8.80,
+      '14G': 11.80
+    }
+  },
+  {
+    id: 'sq-40',
+    type: 'Square Pipe',
+    size: '40 × 40 mm',
+    aliases: ['40 × 40 mm', '40x40 mm', '40 × 40', '40x40', '1.5" (38 × 38 mm)', '38 × 38 mm', '1.5"'],
+    weights20ft: {
+      '18G': 9.40,
+      '16G': 11.80,
+      '14G': 15.60
+    }
+  },
+  {
+    id: 'sq-50',
+    type: 'Square Pipe',
+    size: '50 × 50 mm',
+    aliases: ['50 × 50 mm', '50x50 mm', '50 × 50', '50x50', '2" (50 × 50 mm)', '2"'],
+    weights20ft: {
+      '18G': 11.70,
+      '16G': 14.60,
+      '14G': 19.50
+    }
+  },
+
+  // RECTANGULAR PIPES
+  {
+    id: 'rec-50x25',
     type: 'Rectangle Pipe',
-    size: '1" × 0.5" (25 × 12 mm)',
-    outerDimensionMm: 37,
-    gaugeWeights: {
-      '1.0 mm': 0.170,
-      '1.2 mm': 0.200,
-      '1.5 mm': 0.250,
-      '2.0 mm': 0.320
+    size: '50 × 25 mm',
+    aliases: ['50 × 25 mm', '50x25 mm', '50 × 25', '50x25', '2" × 1" (50 × 25 mm)'],
+    weights20ft: {
+      '18G': 8.80,
+      '16G': 11.00,
+      '14G': 14.70
     }
   },
   {
-    id: 'rec-1.5x1',
+    id: 'rec-40x20',
     type: 'Rectangle Pipe',
-    size: '1.5" × 1" (38 × 25 mm)',
-    outerDimensionMm: 63,
-    gaugeWeights: {
-      '1.0 mm': 0.290,
-      '1.2 mm': 0.340,
-      '1.5 mm': 0.420,
-      '2.0 mm': 0.540
+    size: '40 × 20 mm',
+    aliases: ['40 × 20 mm', '40x20 mm', '40 × 20', '40x20', '1.5" × 1" (38 × 25 mm)', '1" × 0.5" (25 × 12 mm)'],
+    weights20ft: {
+      '18G': 7.00,
+      '16G': 8.80,
+      '14G': 11.80
+    }
+  },
+
+  // ROUND PIPES (Under Square/Rectangular)
+  {
+    id: 'rnd-0.5',
+    type: 'Round Pipe',
+    size: '1/2" Round',
+    aliases: ['1/2"', '1/2" Round', '0.5" Round', '1/2" Dia', '0.5"', '1/2" Dia (12 mm)'],
+    weights20ft: {
+      '18G': 2.10,
+      '16G': 2.50,
+      '14G': null
     }
   },
   {
-    id: 'rec-2x1',
-    type: 'Rectangle Pipe',
-    size: '2" × 1" (50 × 25 mm)',
-    outerDimensionMm: 75,
-    gaugeWeights: {
-      '1.0 mm': 0.350,
-      '1.2 mm': 0.410,
-      '1.5 mm': 0.510,
-      '2.0 mm': 0.660
+    id: 'rnd-0.625',
+    type: 'Round Pipe',
+    size: '5/8" Round',
+    aliases: ['5/8"', '5/8" Round', '0.625" Round', '5/8" Dia'],
+    weights20ft: {
+      '18G': 2.60,
+      '16G': 3.30,
+      '14G': 4.30
+    }
+  },
+  {
+    id: 'rnd-0.75',
+    type: 'Round Pipe',
+    size: '3/4" Round',
+    aliases: ['3/4"', '3/4" Round', '0.75" Round', '3/4" Dia'],
+    weights20ft: {
+      '18G': 3.20,
+      '16G': 4.00,
+      '14G': 5.20
     }
   },
   {
     id: 'rnd-1.0',
     type: 'Round Pipe',
-    size: '1" Dia (25 mm)',
-    outerDimensionMm: 25,
-    gaugeWeights: {
-      '1.0 mm': 0.180,
-      '1.2 mm': 0.210,
-      '1.5 mm': 0.260,
-      '2.0 mm': 0.330
+    size: '1" Round',
+    aliases: ['1"', '1" Round', '1.0" Round', '1" Dia', '1" Dia (25 mm)'],
+    weights20ft: {
+      '18G': 4.40,
+      '16G': 5.50,
+      '14G': 7.00
     }
   },
   {
     id: 'rnd-1.25',
     type: 'Round Pipe',
-    size: '1.25" Dia (32 mm)',
-    outerDimensionMm: 32,
-    gaugeWeights: {
-      '1.0 mm': 0.230,
-      '1.2 mm': 0.270,
-      '1.5 mm': 0.330,
-      '2.0 mm': 0.430
+    size: '1 1/4" Round',
+    aliases: ['1 1/4"', '1 1/4" Round', '1.25" Round', '1.25" Dia', '1.25" Dia (32 mm)', '1 1/4" Dia', '1 1/4" Dia (32 mm)'],
+    weights20ft: {
+      '18G': 5.60,
+      '16G': 7.20,
+      '14G': 9.10
     }
   },
   {
     id: 'rnd-1.5',
     type: 'Round Pipe',
-    size: '1.5" Dia (38 mm)',
-    outerDimensionMm: 38,
-    gaugeWeights: {
-      '1.0 mm': 0.280,
-      '1.2 mm': 0.320,
-      '1.5 mm': 0.400,
-      '2.0 mm': 0.520
+    size: '1 1/2" Round',
+    aliases: ['1 1/2"', '1 1/2" Round', '1.5" Round', '1.5" Dia', '1.5" Dia (38 mm)', '1 1/2" Dia', '1 1/2" Dia (38 mm)'],
+    weights20ft: {
+      '18G': 6.70,
+      '16G': 8.40,
+      '14G': 11.00
+    }
+  },
+  {
+    id: 'rnd-2.0',
+    type: 'Round Pipe',
+    size: '2" Round',
+    aliases: ['2"', '2" Round', '2.0" Round', '2" Dia', '2" Dia (50 mm)'],
+    weights20ft: {
+      '18G': 9.00,
+      '16G': 11.30,
+      '14G': 15.00
+    }
+  },
+  {
+    id: 'rnd-2.5',
+    type: 'Round Pipe',
+    size: '2 1/2" Round',
+    aliases: ['2 1/2"', '2 1/2" Round', '2.5" Round', '2.5" Dia', '2 1/2" Dia'],
+    weights20ft: {
+      '18G': 11.40,
+      '16G': 14.20,
+      '14G': 18.75
+    }
+  },
+  {
+    id: 'rnd-3.0',
+    type: 'Round Pipe',
+    size: '3" Round',
+    aliases: ['3"', '3" Round', '3.0" Round', '3" Dia'],
+    weights20ft: {
+      '18G': 13.75,
+      '16G': 17.00,
+      '14G': 22.60
     }
   }
 ];
 
-export const PIPE_SIZES = PIPE_MASTER.map(p => p.size);
+export const PIPE_SIZE_OPTIONS = PIPE_MASTER.map(p => p.size);
+export const PIPE_SIZES = PIPE_SIZE_OPTIONS;
 
-/**
- * Get weight per foot for a specific pipe size and gauge
- * @param {string} size - e.g. '1.5" (38 × 38 mm)'
- * @param {string} gauge - e.g. '1.2 mm' or '1.5 mm'
- * @returns {number} Weight in kg/ft
- */
-export function getPipeWeightPerFoot(size, gauge = '1.2 mm') {
-  if (!size) return 0.410;
+export function normalizePipeGauge(gauge) {
+  if (!gauge) return '16G';
+  const gStr = String(gauge).trim().toUpperCase();
+  if (gStr.includes('18')) return '18G';
+  if (gStr.includes('14')) return '14G';
+  if (gStr.includes('16')) return '16G';
+  return '16G';
+}
+
+export function findPipeMaster(size) {
+  if (!size) return null;
   const sizeStr = String(size).trim();
-  const pipe = PIPE_MASTER.find(p => p.size === sizeStr || sizeStr.includes(p.size) || p.id === sizeStr);
-  if (!pipe) return 0.410;
+  const normalized = sizeStr.replace(/x/gi, '×').replace(/\s+/g, ' ').trim();
+  
+  // 1. Direct exact match on size or id
+  const exact = PIPE_MASTER.find(p => p.size === sizeStr || p.size === normalized || p.id === sizeStr);
+  if (exact) return exact;
 
-  const gStr = String(gauge).trim().toLowerCase();
-  let cleanGauge = '1.2 mm';
-  if (gStr.includes('1.0') || gStr === '1') cleanGauge = '1.0 mm';
-  else if (gStr.includes('1.5')) cleanGauge = '1.5 mm';
-  else if (gStr.includes('2.0') || gStr.includes('2')) cleanGauge = '2.0 mm';
-  else cleanGauge = '1.2 mm';
+  // 2. Exact match on aliases
+  const aliasExact = PIPE_MASTER.find(p => Array.isArray(p.aliases) && p.aliases.some(a => a.toLowerCase() === sizeStr.toLowerCase() || a.toLowerCase() === normalized.toLowerCase()));
+  if (aliasExact) return aliasExact;
 
-  return pipe.gaugeWeights[cleanGauge] || pipe.gaugeWeights['1.2 mm'] || 0.410;
+  // 3. Substring match (check longer pipe size names first to avoid '1/2"' matching '1 1/2"')
+  const sortedPipes = [...PIPE_MASTER].sort((a, b) => b.size.length - a.size.length);
+  return sortedPipes.find(p => {
+    if (sizeStr.toLowerCase().includes(p.size.toLowerCase())) return true;
+    if (Array.isArray(p.aliases)) {
+      const sortedAliases = [...p.aliases].sort((a, b) => b.length - a.length);
+      return sortedAliases.some(a => sizeStr.toLowerCase().includes(a.toLowerCase()));
+    }
+    return false;
+  }) || null;
+}
+
+export function getPipeWeight20ft(size, gauge = '16G') {
+  if (!size) return null;
+  const pipe = findPipeMaster(size);
+  if (!pipe) return null;
+  const cleanGauge = normalizePipeGauge(gauge);
+  const wt = pipe.weights20ft[cleanGauge];
+  if (wt === undefined || wt === null) return null;
+  return wt;
+}
+
+export function getPipeWeightPerFoot(size, gauge = '16G') {
+  const wt20 = getPipeWeight20ft(size, gauge);
+  if (wt20 === null || wt20 === undefined) return 0;
+  return wt20 / 20;
+}
+
+export function isPipeCombinationUnavailable(size, gauge) {
+  if (!size || !gauge) return false;
+  const pipe = findPipeMaster(size);
+  if (!pipe) return false;
+  const cleanGauge = normalizePipeGauge(gauge);
+  return pipe.weights20ft[cleanGauge] === null || pipe.weights20ft[cleanGauge] === undefined;
 }
 
 // =========================================================================
@@ -282,6 +411,7 @@ export function getItemSizeOptions(materialName) {
 // =========================================================================
 export const COUNTER_TYPES = [
   'Working Table',
+  'Dining Table',
   'Counter',
   'Sink Unit',
   'Sink Unit with Table',
@@ -293,7 +423,6 @@ export const COUNTER_TYPES = [
   'Chapati Puffer Plate',
   'SS Dish Rack',
   'Pot Rack',
-  'Dining Table',
   'Bench',
   'Storage Bin',
   'Trolley',
@@ -310,6 +439,13 @@ export const COUNTER_TYPES_CONFIG = {
     hasSubtypes: false,
     subtypes: [],
     aliases: ['Working Table', 'Table', 'Stainless Steel Kitchen', 'SS Kitchen', 'Work Table'],
+    hasDepth: false,
+    requiresAngle: false
+  },
+  'Dining Table': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Dining Table'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -392,7 +528,7 @@ export const COUNTER_TYPES_CONFIG = {
     hasSubtypes: false,
     subtypes: [],
     hasDepth: false,
-    requiresAngle: false
+    requiresAngle: true
   },
   'SS Tandoor': {
     hasSubtypes: false,
@@ -434,14 +570,14 @@ export const COUNTER_TYPES_CONFIG = {
     subtypes: [],
     aliases: ['Chapati Plate', 'Puffer Plate'],
     hasDepth: false,
-    requiresAngle: false
+    requiresAngle: true
   },
   'Chapati Plate': {
     hasSubtypes: false,
     subtypes: [],
     aliases: ['Chapati Puffer Plate'],
     hasDepth: false,
-    requiresAngle: false
+    requiresAngle: true
   },
   'SS Dish Rack': {
     hasSubtypes: false,
@@ -457,12 +593,6 @@ export const COUNTER_TYPES_CONFIG = {
     requiresAngle: false
   },
   'Pot Rack': {
-    hasSubtypes: false,
-    subtypes: [],
-    hasDepth: false,
-    requiresAngle: false
-  },
-  'Dining Table': {
     hasSubtypes: false,
     subtypes: [],
     hasDepth: false,
@@ -500,8 +630,16 @@ export const COUNTER_TYPES_CONFIG = {
   'Trolley': {
     hasSubtypes: false,
     subtypes: [],
+    aliases: ['Trolley', 'Trolly'],
     hasDepth: false,
-    requiresAngle: false
+    requiresAngle: true
+  },
+  'Trolly': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Trolley', 'Trolly'],
+    hasDepth: false,
+    requiresAngle: true
   },
   'Fridge': {
     hasSubtypes: true,
@@ -562,13 +700,14 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Underhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
+      { materialName: 'Underhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Top Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Roof Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Top Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Roof Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -585,10 +724,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Underhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Top Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Roof Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Top Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Roof Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -616,7 +755,7 @@ export const COUNTER_CONFIG = {
       { materialName: 'Side Covering – Left', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
       { materialName: 'Partition', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Overhead Covering Left', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Overhead Covering Right', grade: '304', gauge: 1.0, isRepeatable: true },
@@ -631,11 +770,11 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tank', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true }
     ],
     angles: [],
     purchased: [
@@ -678,10 +817,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Sink Bowl', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -705,10 +844,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Sink Bowl', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -731,10 +870,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Round Garbage Shute', grade: '304', gauge: 1.2, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Over Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -754,13 +893,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
@@ -789,13 +928,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
@@ -819,13 +958,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'NCV', price: '', isRepeatable: false },
@@ -854,13 +993,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
@@ -887,13 +1026,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'Burner', price: '', dropdownOptions: BURNER_SIZES, allowMultiple: true, isRepeatable: true },
@@ -920,13 +1059,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [
-      { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
       { materialName: 'NCV', price: '', isRepeatable: false },
@@ -942,7 +1081,7 @@ export const COUNTER_CONFIG = {
 
   'Dosa Bhatti': {
     hasDepth: false,
-    requiresAngle: false,
+    requiresAngle: true,
     repeatableComponents: ['Under Shelf'],
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
@@ -953,12 +1092,14 @@ export const COUNTER_CONFIG = {
       { materialName: 'Panel Front Door', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
-    angles: [],
+    angles: [
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
+    ],
     purchased: [
       { materialName: 'MS Plate', price: '', isRepeatable: false },
       { materialName: 'Dosa Burner', price: '', dropdownOptions: DOSA_BURNER_SIZES, allowMultiple: true, isRepeatable: true },
@@ -984,10 +1125,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1008,14 +1149,14 @@ export const COUNTER_CONFIG = {
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawers', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawers', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
       { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1043,10 +1184,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1076,15 +1217,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawers', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawers', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
       { materialName: 'Under Top Side Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1115,15 +1256,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
-      { materialName: 'Drawers', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawers', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
       { materialName: 'Under Top Side Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Table Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Cabin Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1140,7 +1281,7 @@ export const COUNTER_CONFIG = {
 
   'Chapati Puffer Plate': {
     hasDepth: false,
-    requiresAngle: false,
+    requiresAngle: true,
     aliases: ['Chapati Plate', 'Puffer Plate'],
     repeatableComponents: ['Shelf', 'Under Shelf'],
     sheets: [
@@ -1152,12 +1293,14 @@ export const COUNTER_CONFIG = {
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
-    angles: [],
+    angles: [
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
+    ],
     purchased: [
       { materialName: 'Puffer Plate', price: '', isRepeatable: false },
       { materialName: 'MS Plate', price: '', isRepeatable: false },
@@ -1173,7 +1316,7 @@ export const COUNTER_CONFIG = {
 
   'Chapati Plate': {
     hasDepth: false,
-    requiresAngle: false,
+    requiresAngle: true,
     aliases: ['Chapati Puffer Plate'],
     repeatableComponents: ['Shelf', 'Under Shelf'],
     sheets: [
@@ -1185,12 +1328,14 @@ export const COUNTER_CONFIG = {
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
-    angles: [],
+    angles: [
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
+    ],
     purchased: [
       { materialName: 'Puffer Plate', price: '', isRepeatable: false },
       { materialName: 'MS Plate', price: '', isRepeatable: false },
@@ -1212,10 +1357,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1231,10 +1376,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1248,9 +1393,9 @@ export const COUNTER_CONFIG = {
     repeatableComponents: ['Mid Pipe'],
     sheets: [],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Frame Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Mid Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Frame Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Mid Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true }
     ],
     angles: [],
     purchased: [
@@ -1263,14 +1408,15 @@ export const COUNTER_CONFIG = {
     requiresAngle: false,
     repeatableComponents: ['Stool Support Pipe'],
     sheets: [
-      { materialName: 'Table Top', grade: '304', gauge: 1.2, isRepeatable: false }
+      { materialName: 'Table Top', grade: '304', gauge: 1.2, isRepeatable: false },
+      { materialName: 'LAFA', grade: '304', gauge: 1.2, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Center Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Stool Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+      { materialName: 'Center Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Stool Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true }
     ],
     angles: [],
     purchased: [
@@ -1290,10 +1436,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Back Support', grade: '304', gauge: 1.2, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Back Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Leg Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Back Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1317,10 +1463,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tray', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1347,10 +1493,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tray', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1377,10 +1523,10 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tray', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1393,22 +1539,47 @@ export const COUNTER_CONFIG = {
   },
 
   'Trolley': {
-    hasDepth: false,
-    requiresAngle: false,
+    hasDepth: true,
+    requiresAngle: true,
     repeatableComponents: ['Under Shelf'],
     sheets: [
-      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
+      { materialName: 'Top', grade: '304', gauge: 1.2, hasDepth: true, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
       { materialName: 'Tank', grade: '304', gauge: 1.2, isRepeatable: false }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Handle', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1" Dia (25 mm)', isRepeatable: false }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Handle', grade: '304', pipeGauge: '16G', pipeSize: '1" Round', isRepeatable: false }
     ],
-    angles: [],
+    angles: [
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
+    ],
+    purchased: [
+      { materialName: 'Wheels', price: '', isRepeatable: false }
+    ]
+  },
+  'Trolly': {
+    hasDepth: true,
+    requiresAngle: true,
+    repeatableComponents: ['Under Shelf'],
+    sheets: [
+      { materialName: 'Top', grade: '304', gauge: 1.2, hasDepth: true, isRepeatable: false },
+      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Tank', grade: '304', gauge: 1.2, isRepeatable: false }
+    ],
+    pipes: [
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Handle', grade: '304', pipeGauge: '16G', pipeSize: '1" Round', isRepeatable: false }
+    ],
+    angles: [
+      { materialName: 'MS Angle', grade: 'MS', gauge: '25 × 3 mm', isRepeatable: true }
+    ],
     purchased: [
       { materialName: 'Wheels', price: '', isRepeatable: false }
     ]
@@ -1419,18 +1590,18 @@ export const COUNTER_CONFIG = {
     requiresAngle: false,
     repeatableComponents: ['Overhead Shelf', 'Bar Shelf', 'Shelf Patti', 'Patti Clamp', 'Handle', 'Lock'],
     sheets: [
-      { materialName: 'Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8], isRepeatable: false },
-      { materialName: 'Magnet Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8], isRepeatable: false },
-      { materialName: '2B Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8], isRepeatable: false },
-      { materialName: 'PVC Mat', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8], isRepeatable: false },
-      { materialName: 'Overhead Shelf', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8], isRepeatable: true }
+      { materialName: 'Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8, 1.0, 1.2, 1.5], isRepeatable: false },
+      { materialName: 'Magnet Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8, 1.0, 1.2, 1.5], isRepeatable: false },
+      { materialName: '2B Sheet', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8, 1.0, 1.2, 1.5], isRepeatable: false },
+      { materialName: 'PVC Mat', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8, 1.0, 1.2, 1.5], isRepeatable: false },
+      { materialName: 'Overhead Shelf', grade: '304', gauge: 0.8, gaugeOptions: [0.6, 0.8, 1.0, 1.2, 1.5], isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true }
     ],
     angles: [],
     purchased: [
@@ -1483,9 +1654,9 @@ export const COUNTER_CONFIG = {
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: '4 × Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Front Side Railing Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: '4 × Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Front Side Railing Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1521,9 +1692,9 @@ export const COUNTER_CONFIG = {
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true },
-      { materialName: '4 × Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Front Side Railing Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true },
+      { materialName: '4 × Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Front Side Railing Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1553,13 +1724,13 @@ export const COUNTER_CONFIG = {
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
+      { materialName: 'Drawer', grade: '304', gauge: 1.0, hasDepth: true, isRepeatable: true },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Top Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Upper Design Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Required Support Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false }
+      { materialName: 'Top Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Upper Design Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Required Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false }
     ],
     angles: [],
     purchased: [
@@ -1584,9 +1755,9 @@ export const COUNTER_CONFIG = {
       { materialName: 'Round Pot', grade: '304', gauge: 1.2, dropdownOptions: ROUND_POT_SIZES, isRepeatable: true }
     ],
     pipes: [
-      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: false },
-      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', pipeSize: '1.5" (38 × 38 mm)', isRepeatable: true }
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: false },
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '16G', pipeSize: '40 × 40 mm', isRepeatable: true }
     ],
     angles: [],
     purchased: [
@@ -1647,7 +1818,9 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       configKey = 'Chapati Puffer Plate';
     } else if (target.includes('Storage')) {
       configKey = 'Storage Bin';
-    } else if (target.includes('Stainless Steel Kitchen') || (target.includes('Table') && !target.includes('Dining') && !target.includes('Soiled') && !target.includes('Sink'))) {
+    } else if (target.includes('Dining Table') || target.includes('Dining')) {
+      configKey = 'Dining Table';
+    } else if (target.includes('Stainless Steel Kitchen') || target.includes('Working Table') || (target.includes('Table') && !target.includes('Soiled') && !target.includes('Sink'))) {
       configKey = 'Working Table';
     } else if (target.includes('Dish Rack')) {
       configKey = 'SS Dish Rack';
@@ -1664,9 +1837,13 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
 
   const rawCfg = COUNTER_CONFIG[configKey] || COUNTER_CONFIG['Working Table'];
 
+  const isTrolly = configKey.toLowerCase().includes('troll');
   const sheets = (rawCfg.sheets || []).map((s, idx) => {
     const isCovering = (s.materialName || '').toLowerCase().includes('covering');
     const isSinkBowl = (s.materialName || '').toLowerCase().includes('sink') || (s.materialName || '').toLowerCase().includes('bowl');
+    const isDrawer = (s.materialName || '').toLowerCase().includes('drawer');
+    const isTrollyTop = isTrolly && (s.materialName || '').toLowerCase().includes('top');
+    const hasDepth = Boolean(s.hasDepth || isSinkBowl || isDrawer || isTrollyTop);
     return {
       id: `sheet-${idx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       material: s.materialName,
@@ -1675,7 +1852,8 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       length: '',
       width: isCovering ? '' : '',
       height: isCovering ? '' : undefined,
-      depth: (rawCfg.hasDepth && isSinkBowl) ? '' : undefined,
+      depth: hasDepth ? '' : undefined,
+      hasDepth: hasDepth,
       gauge: s.gauge !== undefined ? s.gauge : (isCovering ? 1.0 : 1.2),
       gaugeOptions: s.gaugeOptions || null,
       quantity: '',
@@ -1689,8 +1867,8 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
     material: p.materialName,
     calculationType: 'pipe',
     grade: p.grade || '304',
-    pipeGauge: p.pipeGauge || '1.2 mm',
-    pipeSize: p.pipeSize || '1.5" (38 × 38 mm)',
+    pipeGauge: p.pipeGauge || '16G',
+    pipeSize: p.pipeSize || '40 × 40 mm',
     length: '',
     unit: 'ft',
     quantity: '',
@@ -1699,11 +1877,12 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
 
   const angles = (rawCfg.angles || []).map((a, idx) => ({
     id: `angle-${idx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    material: a.materialName,
+    material: a.materialName || 'MS Angle',
     calculationType: 'angle',
-    grade: a.grade || '304',
+    grade: a.grade || 'MS',
     gauge: a.gauge || '25 × 3 mm',
     length: '',
+    unit: 'ft',
     quantity: '',
     isRepeatable: Boolean(a.isRepeatable)
   }));
@@ -1748,6 +1927,7 @@ export const DEFAULT_MASTER_PRODUCTS = Object.entries(COUNTER_CONFIG).flatMap(([
       materialType: 'Sheet Metal',
       grade: s.grade || '304',
       gauge: s.gauge || 1.2,
+      gaugeOptions: s.gaugeOptions || null,
       counterTypes: [counterKey],
       order: idx + 1,
       status: 'Active',
@@ -1763,7 +1943,7 @@ export const DEFAULT_MASTER_PRODUCTS = Object.entries(COUNTER_CONFIG).flatMap(([
       calculationType: 'Pipe',
       materialType: 'Framework',
       grade: p.grade || '304',
-      gauge: p.pipeGauge || '1.2 mm',
+      gauge: p.pipeGauge || '16G',
       counterTypes: [counterKey],
       order: idx + 1,
       status: 'Active',
@@ -1826,7 +2006,6 @@ export const DEFAULT_MASTER_PRODUCTS = Object.entries(COUNTER_CONFIG).flatMap(([
 export const STANDARD_GAUGES = SHEET_GAUGE_OPTIONS;
 export const STANDARD_GAUGE_WEIGHTS = GAUGE_WEIGHTS_32SQFT;
 export const STAINLESS_STEEL_GRADES = SHEET_GRADES;
-export const PIPE_SIZE_OPTIONS = PIPE_SIZES;
 
 // Company details for headers, quotation bills, and sidebar (Section 35)
 export const COMPANY_DETAILS = {

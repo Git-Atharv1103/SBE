@@ -42,3 +42,7 @@ next-env.d.ts
 
 # generated pdfs
 *.pdf
+
+# external/nested
+SBE---Project-Y/
+.vscode/
