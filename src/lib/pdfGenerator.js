@@ -282,94 +282,79 @@ export function generateQuotationPDF(estimateData, options = {}) {
 
   // -------------------------------------------------------------
   // 4. CUSTOMER BILL TABLE
-  // Columns: | Sr. No. | Counter Name | Qty | Amount (₹) |
-  // Widths: 18mm (~10%), 96mm (~54%), 20mm (~11%), 44mm (~25%) = 178mm (100%)
+  // Columns: | Sr. No. | Particular | Qty | Rate | Amount (₹) |
   // -------------------------------------------------------------
   const tableHeaders = [
     [
       { content: 'Sr. No.', styles: { halign: 'center' } },
-      { content: 'Counter Name', styles: { halign: 'left' } },
+      { content: 'Particular', styles: { halign: 'left' } },
       { content: 'Qty', styles: { halign: 'center' } },
+      { content: 'Rate (₹)', styles: { halign: 'right' } },
       { content: 'Amount (₹)', styles: { halign: 'right' } }
     ]
   ];
 
   const productRows = [];
 
-  // Build rows dynamically supporting multi-counter items array or single counter
-  if (Array.isArray(estimateData.items) && estimateData.items.length > 0) {
-    estimateData.items.forEach((item, idx) => {
-      const q = parseFloat(item.quantity || item.qty || 1) || 1;
-      const amt = parseFloat(item.amount || item.sellingPrice || item.price || 0) || 0;
-      const name = (item.counterName || item.name || 'Commercial Kitchen Equipment').trim();
+  const mainEquipmentName = estimateData.counterSubtype
+    ? `${estimateData.counterType || 'Commercial Kitchen Equipment'} (${estimateData.counterSubtype})`
+    : (estimateData.counterType || 'Commercial Kitchen Equipment');
 
-      productRows.push([
-        { content: String(idx + 1), styles: { halign: 'center' } },
-        { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
-        { content: String(q), styles: { halign: 'center' } },
-        { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
-      ]);
-    });
-  } else if (Array.isArray(estimateData.counters) && estimateData.counters.length > 0) {
-    estimateData.counters.forEach((cnt, idx) => {
-      const q = parseFloat(cnt.quantity || cnt.qty || 1) || 1;
-      const amt = parseFloat(cnt.amount || cnt.sellingPrice || 0) || 0;
-      const name = (cnt.counterName || cnt.name || 'Commercial Kitchen Equipment').trim();
+  const counterQty = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
+  const unitRate = calculation.unitSellingPrice || 0;
+  const totalSellingPrice = calculation.totalSellingPrice || (unitRate * counterQty);
 
-      productRows.push([
-        { content: String(idx + 1), styles: { halign: 'center' } },
-        { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
-        { content: String(q), styles: { halign: 'center' } },
-        { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
-      ]);
-    });
-  } else {
-    // Single counter estimate item
-    const mainEquipmentName = estimateData.counterSubtype
-      ? `${estimateData.counterType || 'Commercial Kitchen Equipment'} (${estimateData.counterSubtype})`
-      : (estimateData.counterType || 'Commercial Kitchen Equipment');
+  productRows.push([
+    { content: '1', styles: { halign: 'center' } },
+    { content: mainEquipmentName, styles: { halign: 'left', fontStyle: 'normal' } },
+    { content: String(counterQty), styles: { halign: 'center' } },
+    { content: formatRupee(unitRate), styles: { halign: 'right', fontStyle: 'normal' } },
+    { content: formatRupee(totalSellingPrice), styles: { halign: 'right', fontStyle: 'bold' } }
+  ]);
 
-    const counterQty = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
-    
-    // Selling Price calculation
-    let finalSellingAmount = 0;
-    if (estimateData.finalTotal && !isNaN(parseFloat(estimateData.finalTotal))) {
-      finalSellingAmount = parseFloat(estimateData.finalTotal);
-    } else if (estimateData.sellingPrice && !isNaN(parseFloat(estimateData.sellingPrice))) {
-      finalSellingAmount = parseFloat(estimateData.sellingPrice) * counterQty;
-    } else {
-      finalSellingAmount = calculation.sellingPrice * counterQty;
-    }
+  // Selected Purchased Items with price > 0 and qty > 0 if any
+  let itemIndex = 2;
+  const selectedPurchasedItems = (Array.isArray(estimateData.purchased) ? estimateData.purchased : []).filter(
+    p => p && parseFloat(p.quantity) > 0 && parseFloat(p.price) > 0
+  );
+  selectedPurchasedItems.forEach(p => {
+    const q = parseFloat(p.quantity) || 1;
+    const rate = parseFloat(p.price) || 0;
+    const amt = q * rate;
+    const name = p.size ? `${p.material} (${p.size})` : p.material;
 
     productRows.push([
-      { content: '1', styles: { halign: 'center' } },
-      { content: mainEquipmentName, styles: { halign: 'left', fontStyle: 'normal' } },
-      { content: String(counterQty), styles: { halign: 'center' } },
-      { content: formatRupee(finalSellingAmount), styles: { halign: 'right', fontStyle: 'bold' } }
+      { content: String(itemIndex++), styles: { halign: 'center' } },
+      { content: name, styles: { halign: 'left', fontStyle: 'normal' } },
+      { content: String(q), styles: { halign: 'center' } },
+      { content: formatRupee(rate), styles: { halign: 'right', fontStyle: 'normal' } },
+      { content: formatRupee(amt), styles: { halign: 'right', fontStyle: 'bold' } }
+    ]);
+  });
+
+  // Total Summary rows
+  const totalQty = counterQty + selectedPurchasedItems.reduce((s, p) => s + (parseFloat(p.quantity) || 0), 0);
+  const subTotalAmount = totalSellingPrice + selectedPurchasedItems.reduce((s, p) => s + ((parseFloat(p.quantity) || 0) * (parseFloat(p.price) || 0)), 0);
+
+  if (calculation.gstAmount > 0) {
+    productRows.push([
+      { content: `GST (${calculation.gstPercent}%)`, colSpan: 4, styles: { halign: 'right', fontStyle: 'normal' } },
+      { content: formatRupee(calculation.gstAmount), styles: { halign: 'right', fontStyle: 'bold' } }
     ]);
   }
 
-  // Calculate Grand Total Amount across all counters
-  let totalCustomerAmount = 0;
-  if (Array.isArray(estimateData.items) && estimateData.items.length > 0) {
-    totalCustomerAmount = estimateData.items.reduce((sum, it) => sum + (parseFloat(it.amount || it.sellingPrice || 0) || 0), 0);
-  } else if (Array.isArray(estimateData.counters) && estimateData.counters.length > 0) {
-    totalCustomerAmount = estimateData.counters.reduce((sum, it) => sum + (parseFloat(it.amount || it.sellingPrice || 0) || 0), 0);
-  } else if (estimateData.finalTotal && !isNaN(parseFloat(estimateData.finalTotal))) {
-    totalCustomerAmount = parseFloat(estimateData.finalTotal);
-  } else if (estimateData.sellingPrice && !isNaN(parseFloat(estimateData.sellingPrice))) {
-    const q = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
-    totalCustomerAmount = parseFloat(estimateData.sellingPrice) * q;
-  } else {
-    const q = parseFloat(estimateData.counterQuantity || estimateData.quantity || 1) || 1;
-    totalCustomerAmount = calculation.sellingPrice * q;
+  if (calculation.discount > 0) {
+    productRows.push([
+      { content: 'Discount', colSpan: 4, styles: { halign: 'right', fontStyle: 'normal', textColor: [225, 29, 72] } },
+      { content: `- ${formatRupee(calculation.discount)}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [225, 29, 72] } }
+    ]);
   }
 
-  // TOTAL ROW: Right-aligned across first three columns with final amount in Amount column
+  // GRAND TOTAL ROW
   productRows.push([
     { 
-      content: 'TOTAL', 
-      colSpan: 3, 
+      content: `GRAND TOTAL (Qty: ${totalQty})`, 
+      colSpan: 4, 
       styles: { 
         halign: 'right', 
         fontStyle: 'bold', 
@@ -379,7 +364,7 @@ export function generateQuotationPDF(estimateData, options = {}) {
       } 
     },
     { 
-      content: formatRupee(totalCustomerAmount), 
+      content: formatRupee(calculation.finalTotal), 
       styles: { 
         halign: 'right', 
         fontStyle: 'bold', 
@@ -419,10 +404,11 @@ export function generateQuotationPDF(estimateData, options = {}) {
       lineWidth: 0.2
     },
     columnStyles: {
-      0: { cellWidth: 18, halign: 'center' }, // Sr. No. (10.1%)
-      1: { cellWidth: 96, halign: 'left' },   // Counter Name (53.9%)
-      2: { cellWidth: 20, halign: 'center' }, // Qty (11.2%)
-      3: { cellWidth: 44, halign: 'right' }   // Amount (₹) (24.7%)
+      0: { cellWidth: 16, halign: 'center' }, // Sr. No.
+      1: { cellWidth: 84, halign: 'left' },   // Particular
+      2: { cellWidth: 18, halign: 'center' }, // Qty
+      3: { cellWidth: 30, halign: 'right' },  // Rate (₹)
+      4: { cellWidth: 30, halign: 'right' }   // Amount (₹)
     },
     margin: { left: margin, right: margin, bottom: bottomMargin + 8 },
     showHead: 'everyPage'
@@ -439,7 +425,7 @@ export function generateQuotationPDF(estimateData, options = {}) {
     afterTableY = topMargin + 2;
   }
 
-  const wordsText = numberToWords(totalCustomerAmount);
+  const wordsText = numberToWords(calculation.finalTotal);
 
   doc.setFillColor(248, 250, 252); // slate-50
   doc.roundedRect(margin, afterTableY, contentWidth, 8, 1, 1, 'F');
