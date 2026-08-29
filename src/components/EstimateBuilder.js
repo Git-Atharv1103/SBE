@@ -200,8 +200,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   // Derive active counter type configuration
   const currentCounterConfig = useMemo(() => {
     if (!clientData.counterType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-    return COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-  }, [clientData.counterType]);
+    const base = COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
+    if (clientData.counterSubtype && COUNTER_TYPES_CONFIG[clientData.counterSubtype]) {
+      return {
+        ...base,
+        ...COUNTER_TYPES_CONFIG[clientData.counterSubtype]
+      };
+    }
+    return base;
+  }, [clientData.counterType, clientData.counterSubtype]);
 
   // Helper to check if a counter name is a Gas Range subtype
   const isGasRangeSubtype = (name) => {
@@ -215,6 +222,26 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       (n.startsWith('gas range ') && n !== 'gas range');
   };
 
+  // Canonical Counter Name Normalizer
+  const normalizeCounterName = (rawName) => {
+    const clean = (rawName || '').trim();
+    const lower = clean.toLowerCase();
+    if (lower === 'table' || lower === 'work table') return 'Working Table';
+    if (lower === 'storage' || lower === 'storage bin' || lower.includes('onion') || lower.includes('potato')) return 'Storage Bin';
+    if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
+    if (lower.includes('gn pan') || lower.includes('round pot') || lower.includes('round. pot')) return 'GN PAN / ROUND POT';
+    if (lower === 'dish rack') return 'SS Dish Rack';
+    return clean;
+  };
+
+  // Helper to exclude Gas Range subtypes from the active main dropdown
+  const isExcludedFromActiveDropdown = (name) => {
+    const n = (name || '').toLowerCase().trim();
+    if (!n) return true;
+    if (isGasRangeSubtype(n)) return true;
+    return false;
+  };
+
   // Dynamically derive all available main counter types (Deduplicated strictly)
   const availableCounterTypes = useMemo(() => {
     const seen = new Set();
@@ -222,22 +249,22 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
     // First, standard counter types from constants
     COUNTER_TYPES.forEach(ct => {
-      const clean = ct.trim();
-      const lower = clean.toLowerCase();
-      if (!isGasRangeSubtype(clean) && !seen.has(lower)) {
+      const canonical = normalizeCounterName(ct);
+      const lower = canonical.toLowerCase();
+      if (!isExcludedFromActiveDropdown(canonical) && !seen.has(lower)) {
         seen.add(lower);
-        result.push(clean);
+        result.push(canonical);
       }
     });
 
     // Then master counter types from DB
     masterCounterTypes.forEach(ct => {
       if (ct.name && ct.status !== 'Inactive') {
-        const cleanName = ct.name.trim() === 'Table' ? 'Working Table' : ct.name.trim();
-        const lower = cleanName.toLowerCase();
-        if (!isGasRangeSubtype(cleanName) && !seen.has(lower)) {
+        const canonical = normalizeCounterName(ct.name);
+        const lower = canonical.toLowerCase();
+        if (!isExcludedFromActiveDropdown(canonical) && !seen.has(lower)) {
           seen.add(lower);
-          result.push(cleanName);
+          result.push(canonical);
         }
       }
     });
@@ -705,11 +732,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       date: new Date().toISOString().split('T')[0]
     });
     setPricingInputs({
-      sheetRate: '250',
-      pipeRate: '270',
-      angleRate: '220',
-      materialRate: '250',
-      labourRate: '100',
+      sheetRate: '',
+      pipeRate: '',
+      angleRate: '',
+      materialRate: '',
+      labourRate: '',
       labourCost: '',
       sellingPercentage: '',
       gst: '',

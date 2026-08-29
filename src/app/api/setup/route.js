@@ -56,8 +56,9 @@ export async function GET() {
       'Dosa Bhatti': 'Heavy Duty Commercial Griddle & Bhatti with MS Plate',
       'SS Tandoor': 'Insulated Stainless Steel Charcoal / Gas Tandoor',
       'Bain Marie': 'Commercial Hot Bain Marie Food Warming Counter with Pan Railing',
-      'GN Pan / Round Pot / Vessel': 'Food Service Display & Multi-pot Bain Counter',
+      'GN PAN / ROUND POT': 'Food Service Display & Multi-pot Bain Counter',
       'Tea Counter': 'Commercial Tea Service Counter with 3-Side Covering & Drawers',
+      'Chapati Puffer Plate': 'Puffer Hotplate & Griddle Roti / Chapati Station',
       'Chapati Plate': 'Puffer Hotplate & Griddle Roti / Chapati Station',
       'Shawarma Cabin': 'Commercial Shawarma Rotisserie & Cabin Unit'
     };

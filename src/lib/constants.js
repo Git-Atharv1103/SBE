@@ -271,16 +271,16 @@ export const COUNTER_TYPES = [
   'Dosa Bhatti',
   'SS Tandoor',
   'Shawarma Cabin',
-  'Chapati Plate',
+  'Chapati Puffer Plate',
+  'Storage Bin',
   'SS Dish Rack',
   'Pot Rack',
   'Dining Table',
   'Bench',
-  'Storage Bin',
   'Trolley',
   'Fridge',
   'Bain Marie',
-  'GN Pan / Round Pot / Vessel',
+  'GN PAN / ROUND POT',
   'Tea Counter'
 ];
 
@@ -290,7 +290,7 @@ export const COUNTER_TYPES_CONFIG = {
   'Working Table': {
     hasSubtypes: false,
     subtypes: [],
-    aliases: ['Table', 'Work Table'],
+    aliases: ['Table', 'Work Table', 'Stainless Steel Kitchen', 'Counter', 'Counters'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -307,23 +307,16 @@ export const COUNTER_TYPES_CONFIG = {
     requiresAngle: false
   },
   'Storage': {
-    hasSubtypes: true,
-    subtypeLabel: 'Storage Type',
-    subtypes: [
-      'Onion/Potato',
-      'Grain Storage'
-    ],
-    aliases: ['Storage Bin'],
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Storage Bin', 'Onion/Potato', 'Grain Storage'],
     hasDepth: false,
     requiresAngle: false
   },
   'Storage Bin': {
-    hasSubtypes: true,
-    subtypeLabel: 'Storage Type',
-    subtypes: [
-      'Onion/Potato',
-      'Grain Storage'
-    ],
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Storage', 'Onion/Potato', 'Grain Storage'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -366,24 +359,10 @@ export const COUNTER_TYPES_CONFIG = {
   },
   'Fridge': {
     hasSubtypes: true,
-    isHierarchical: true,
-    subtypeLabel: 'Fridge / Makeline Type & Size',
-    orientationLabel: 'Category & Orientation',
-    orientations: ['Pizza Makeline', 'Work Top', 'Vertical'],
+    subtypeLabel: 'Fridge Type',
     subtypes: [
-      'Pizza Makeline - 4 ft',
-      'Pizza Makeline - 5 ft',
-      'Pizza Makeline - 6 ft',
-      'Work Top - 4 ft',
-      'Work Top - 5 ft',
-      'Work Top - 6 ft',
-      'Work Top - 7 ft',
-      'Work Top - 8 ft',
-      'Vertical - 2 Doors',
-      'Vertical - 3 Doors',
-      'Vertical - 4 Doors',
-      'Vertical - 5 Doors',
-      'Vertical - 6 Doors'
+      'Vertical',
+      'Horizontal'
     ],
     hasDepth: false,
     requiresAngle: false
@@ -456,16 +435,30 @@ export const COUNTER_TYPES_CONFIG = {
     hasDepth: false,
     requiresAngle: false
   },
+  'GN PAN / ROUND POT': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['GN Pan / Round Pot', 'GN Pan / Round Pot / Vessel', 'GN Pan', 'Round Pot', 'GN PAN / ROUND. Pot/vessel', 'GN PAN / ROUND. POT/VESSEL'],
+    hasDepth: false,
+    requiresAngle: false
+  },
   'GN Pan / Round Pot / Vessel': {
     hasSubtypes: false,
     subtypes: [],
-    aliases: ['GN Pan', 'Round Pot', 'Round Vessel'],
+    aliases: ['GN PAN / ROUND POT', 'GN Pan / Round Pot', 'GN Pan', 'Round Pot'],
     hasDepth: false,
     requiresAngle: false
   },
   'Tea Counter': {
     hasSubtypes: false,
     subtypes: [],
+    hasDepth: false,
+    requiresAngle: false
+  },
+  'Chapati Puffer Plate': {
+    hasSubtypes: false,
+    subtypes: [],
+    aliases: ['Chapati Plate', 'Puffer Plate'],
     hasDepth: false,
     requiresAngle: false
   },
@@ -513,7 +506,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -536,9 +529,9 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Water Tap', price: 650, isRepeatable: false },
-      { materialName: 'Drain Outlet / Waste Coupling', price: 180, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Water Tap', price: '', isRepeatable: false },
+      { materialName: 'Drain Outlet / Waste Coupling', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -561,9 +554,9 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Water Tap', price: 650, isRepeatable: false },
-      { materialName: 'Drain Outlet / Waste Coupling', price: 180, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Water Tap', price: '', isRepeatable: false },
+      { materialName: 'Drain Outlet / Waste Coupling', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -576,9 +569,9 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tray', grade: '304', gauge: 1.2, isRepeatable: true },
       { materialName: 'Top Door', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Bottom', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Base', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Internal Partition', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
@@ -589,12 +582,12 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Handle', price: 150, isRepeatable: false },
-      { materialName: 'Hinges', price: 120, isRepeatable: false },
-      { materialName: 'Wheel', price: 350, isRepeatable: false },
-      { materialName: 'Square Bar Grill', price: 850, isRepeatable: false },
-      { materialName: 'Bar', price: 220, dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Onion Cloth', price: 250, isRepeatable: false }
+      { materialName: 'Handle', price: '', isRepeatable: false },
+      { materialName: 'Hinges', price: '', isRepeatable: false },
+      { materialName: 'Wheel', price: '', isRepeatable: false },
+      { materialName: 'Square Bar Grill', price: '', isRepeatable: false },
+      { materialName: 'Bar', price: '', dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Onion Cloth', price: '', isRepeatable: false }
     ]
   },
 
@@ -607,9 +600,9 @@ export const COUNTER_CONFIG = {
       { materialName: 'Tray', grade: '304', gauge: 1.2, isRepeatable: true },
       { materialName: 'Top Door', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Bottom', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Base', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Internal Partition', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
@@ -620,12 +613,12 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Handle', price: 150, isRepeatable: false },
-      { materialName: 'Hinges', price: 120, isRepeatable: false },
-      { materialName: 'Wheel', price: 350, isRepeatable: false },
-      { materialName: 'Square Bar Grill', price: 850, isRepeatable: false },
-      { materialName: 'Bar', price: 220, dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Onion Cloth', price: 250, isRepeatable: false }
+      { materialName: 'Handle', price: '', isRepeatable: false },
+      { materialName: 'Hinges', price: '', isRepeatable: false },
+      { materialName: 'Wheel', price: '', isRepeatable: false },
+      { materialName: 'Square Bar Grill', price: '', isRepeatable: false },
+      { materialName: 'Bar', price: '', dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Onion Cloth', price: '', isRepeatable: false }
     ]
   },
 
@@ -642,7 +635,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -659,7 +652,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -675,7 +668,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -695,10 +688,10 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false },
-      { materialName: 'Thali', price: 420, isRepeatable: false },
-      { materialName: 'Patti', price: 180, dropdownOptions: ['25×3', '30×3'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Bar', price: 220, dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true }
+      { materialName: 'Bush', price: '', isRepeatable: false },
+      { materialName: 'Thali', price: '', isRepeatable: false },
+      { materialName: 'Patti', price: '', dropdownOptions: ['25×3', '30×3'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Bar', price: '', dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true }
     ]
   },
 
@@ -718,7 +711,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -740,7 +733,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Wheels', price: 450, isRepeatable: false }
+      { materialName: 'Wheels', price: '', isRepeatable: false }
     ]
   },
 
@@ -762,15 +755,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Burner', price: 650, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'PAN Support Casting / Drum Support', price: 550, isRepeatable: false },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Burner', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'PAN Support Casting / Drum Support', price: '', isRepeatable: false },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -792,15 +785,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Burner', price: 650, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'PAN Support Casting / Drum Support', price: 550, isRepeatable: false },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Burner', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'PAN Support Casting / Drum Support', price: '', isRepeatable: false },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -822,15 +815,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Burner', price: 650, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'PAN Support Casting / Drum Support', price: 550, isRepeatable: false },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Burner', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'PAN Support Casting / Drum Support', price: '', isRepeatable: false },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -852,15 +845,15 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Burner', price: 650, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'PAN Support Casting / Drum Support', price: 550, isRepeatable: false },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Burner', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'PAN Support Casting / Drum Support', price: '', isRepeatable: false },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -871,9 +864,9 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false }
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
       { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', isRepeatable: false },
@@ -885,14 +878,14 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Chinese Gas Burner', price: 850, isRepeatable: true },
-      { materialName: 'Dom', price: 450, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Chinese Gas Burner', price: '', isRepeatable: true },
+      { materialName: 'Dom', price: '', isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -914,17 +907,17 @@ export const COUNTER_CONFIG = {
       { materialName: 'Angle', grade: '304', gauge: '25 × 3 mm', isRepeatable: true }
     ],
     purchased: [
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Chinese Gas Burner', price: 850, isRepeatable: true },
-      { materialName: 'Dom', price: 450, isRepeatable: true },
-      { materialName: 'Burner', price: 650, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'PAN Support Casting / Drum Support', price: 550, isRepeatable: false },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Chinese Gas Burner', price: '', isRepeatable: true },
+      { materialName: 'Dom', price: '', isRepeatable: true },
+      { materialName: 'Burner', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'PAN Support Casting / Drum Support', price: '', isRepeatable: false },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -935,9 +928,9 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Panel Front Door', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
@@ -948,16 +941,16 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Handle', price: 150, isRepeatable: false },
-      { materialName: 'Wheels', price: 450, isRepeatable: false },
-      { materialName: 'MS Plate', price: 1400, isRepeatable: false },
-      { materialName: 'Dosa Burner', price: 750, dropdownOptions: ['1', '1.5', '2', '2.5', '3', '3.5', '4'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Pilot Burner', price: 150, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Handle', price: '', isRepeatable: false },
+      { materialName: 'Wheels', price: '', isRepeatable: false },
+      { materialName: 'MS Plate', price: '', isRepeatable: false },
+      { materialName: 'Dosa Burner', price: '', dropdownOptions: ['1', '1.5', '2', '2.5', '3', '3.5', '4'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Pilot Burner', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -967,9 +960,9 @@ export const COUNTER_CONFIG = {
     repeatableComponents: [],
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false }
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
       { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', isRepeatable: false },
@@ -979,9 +972,9 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Wooden Ply with Nut & Bolt', price: 450, isRepeatable: false },
-      { materialName: 'Kumbhar Work', price: 1800, isRepeatable: false },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false }
+      { materialName: 'Wooden Ply with Nut & Bolt', price: '', isRepeatable: false },
+      { materialName: 'Kumbhar Work', price: '', isRepeatable: false },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false }
     ]
   },
 
@@ -993,8 +986,8 @@ export const COUNTER_CONFIG = {
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Front Side Railing', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
@@ -1008,23 +1001,24 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Glass', price: 600, isRepeatable: false },
-      { materialName: 'GN Pan', price: 550, dropdownOptions: ['1', '1.2', '1.3', '1.4', '1.5', '1.6'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Coil', price: 750, isRepeatable: false },
-      { materialName: 'Thermostat', price: 650, isRepeatable: false },
-      { materialName: 'Rotary Switch', price: 180, isRepeatable: false },
-      { materialName: 'Bush', price: 50, isRepeatable: false },
-      { materialName: 'Handle', price: 150, isRepeatable: true },
-      { materialName: '3 Pin Top', price: 180, isRepeatable: false },
-      { materialName: 'Wire', price: 250, isRepeatable: false },
-      { materialName: 'Patti Wall', price: 250, isRepeatable: false },
-      { materialName: 'Hinges', price: 120, isRepeatable: true }
+      { materialName: 'Glass', price: '', isRepeatable: false },
+      { materialName: 'GN Pan', price: '', dropdownOptions: ['1', '1.2', '1.3', '1.4', '1.5', '1.6'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Coil', price: '', isRepeatable: false },
+      { materialName: 'Thermostat', price: '', isRepeatable: false },
+      { materialName: 'Rotary Switch', price: '', isRepeatable: false },
+      { materialName: 'Bush', price: '', isRepeatable: false },
+      { materialName: 'Handle', price: '', isRepeatable: true },
+      { materialName: '3 Pin Top', price: '', isRepeatable: false },
+      { materialName: 'Wire', price: '', isRepeatable: false },
+      { materialName: 'Patti Wall', price: '', isRepeatable: false },
+      { materialName: 'Hinges', price: '', isRepeatable: true }
     ]
   },
 
-  'GN Pan / Round Pot / Vessel': {
+  'GN PAN / ROUND POT': {
     hasDepth: false,
     requiresAngle: false,
+    aliases: ['GN Pan / Round Pot', 'GN Pan / Round Pot / Vessel', 'GN Pan', 'Round Pot', 'GN PAN / ROUND. Pot/vessel'],
     repeatableComponents: ['Overhead Shelf', 'Under Shelf', 'Round Pot', 'GN Pan', 'Round Vessel'],
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
@@ -1039,9 +1033,33 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'GN Pan', price: 550, dropdownOptions: ['1', '1.2', '1.3', '1.4', '1.5', '1.6'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Round Vessel', price: 480, dropdownOptions: ['2 L', '5 L', '7 L', '10 L'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'GN Pan', price: '', dropdownOptions: ['1', '1.2', '1.3', '1.4', '1.5', '1.6'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Round Vessel', price: '', dropdownOptions: ['2 L', '5 L', '7 L', '10 L'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Bush', price: '', isRepeatable: false }
+    ]
+  },
+
+  'GN Pan / Round Pot / Vessel': {
+    hasDepth: false,
+    requiresAngle: false,
+    aliases: ['GN PAN / ROUND POT', 'GN Pan / Round Pot', 'GN Pan', 'Round Pot'],
+    repeatableComponents: ['Overhead Shelf', 'Under Shelf', 'Round Pot', 'GN Pan', 'Round Vessel'],
+    sheets: [
+      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
+      { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Round Pot', grade: '304', gauge: 1.2, dropdownOptions: ROUND_POT_QUANTITIES, isRepeatable: true }
+    ],
+    pipes: [
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', isRepeatable: false },
+      { materialName: 'Overhead Shelf Pipe', grade: '304', pipeGauge: '1.2 mm', isRepeatable: true }
+    ],
+    angles: [],
+    purchased: [
+      { materialName: 'GN Pan', price: '', dropdownOptions: ['1', '1.2', '1.3', '1.4', '1.5', '1.6'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Round Vessel', price: '', dropdownOptions: ['2 L', '5 L', '7 L', '10 L'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -1052,12 +1070,12 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Top Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Top Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Top Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Under Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Top Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Top Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Under Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Under Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Under Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Drawers', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Doors', grade: '304', gauge: 1.0, isRepeatable: true }
     ],
@@ -1068,22 +1086,23 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false },
-      { materialName: 'Handle', price: 150, isRepeatable: true },
-      { materialName: 'Lock', price: 180, isRepeatable: true }
+      { materialName: 'Bush', price: '', isRepeatable: false },
+      { materialName: 'Handle', price: '', isRepeatable: true },
+      { materialName: 'Lock', price: '', isRepeatable: true }
     ]
   },
 
-  'Chapati Plate': {
+  'Chapati Puffer Plate': {
     hasDepth: false,
     requiresAngle: false,
+    aliases: ['Chapati Plate', 'Puffer Plate'],
     repeatableComponents: ['Under Shelf'],
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false }
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
     ],
     pipes: [
       { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', isRepeatable: false },
@@ -1093,15 +1112,47 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Puffer Plate', price: 950, isRepeatable: false },
-      { materialName: 'MS Plate', price: 1400, isRepeatable: false },
-      { materialName: 'Dosa Burner', price: 750, dropdownOptions: ['1', '1.5', '2', '2.5', '3', '3.5', '4'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Puffer Burner', price: 480, isRepeatable: false },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Puffer Plate', price: '', isRepeatable: false },
+      { materialName: 'MS Plate', price: '', isRepeatable: false },
+      { materialName: 'Dosa Burner', price: '', dropdownOptions: ['1', '1.5', '2', '2.5', '3', '3.5', '4'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Puffer Burner', price: '', isRepeatable: false },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Bush', price: '', isRepeatable: false }
+    ]
+  },
+
+  'Chapati Plate': {
+    hasDepth: false,
+    requiresAngle: false,
+    aliases: ['Chapati Puffer Plate'],
+    repeatableComponents: ['Under Shelf'],
+    sheets: [
+      { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
+      { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
+      { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false }
+    ],
+    pipes: [
+      { materialName: 'Leg Pipe', grade: '304', pipeGauge: '1.5 mm', isRepeatable: false },
+      { materialName: 'Top Support Pipe', grade: '304', pipeGauge: '1.2 mm', isRepeatable: false },
+      { materialName: 'Shelf Support Pipe', grade: '304', pipeGauge: '1.2 mm', isRepeatable: false },
+      { materialName: 'Under Support Pipe', grade: '304', pipeGauge: '1.2 mm', isRepeatable: false }
+    ],
+    angles: [],
+    purchased: [
+      { materialName: 'Puffer Plate', price: '', isRepeatable: false },
+      { materialName: 'MS Plate', price: '', isRepeatable: false },
+      { materialName: 'Dosa Burner', price: '', dropdownOptions: ['1', '1.5', '2', '2.5', '3', '3.5', '4'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Puffer Burner', price: '', isRepeatable: false },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -1122,34 +1173,34 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Puff Insulation', price: 1200, isRepeatable: false },
-      { materialName: 'Copper Coil', price: 1650, isRepeatable: false },
-      { materialName: 'Solder', price: 250, isRepeatable: false },
-      { materialName: 'Shelf Patti', price: 320, isRepeatable: true },
-      { materialName: 'Bar Shelf', price: 450, isRepeatable: true },
-      { materialName: 'Patti Clamp', price: 120, isRepeatable: true },
-      { materialName: 'Nut & Bolt', price: 80, isRepeatable: false },
-      { materialName: 'Side Grill', price: 650, isRepeatable: false },
-      { materialName: 'Handle', price: 150, isRepeatable: true },
-      { materialName: 'Hinges', price: 120, isRepeatable: true },
-      { materialName: 'Wheel', price: 350, isRepeatable: false },
-      { materialName: 'Lock', price: 180, isRepeatable: true }
+      { materialName: 'Puff Insulation', price: '', isRepeatable: false },
+      { materialName: 'Copper Coil', price: '', isRepeatable: false },
+      { materialName: 'Solder', price: '', isRepeatable: false },
+      { materialName: 'Shelf Patti', price: '', isRepeatable: true },
+      { materialName: 'Bar Shelf', price: '', isRepeatable: true },
+      { materialName: 'Patti Clamp', price: '', isRepeatable: true },
+      { materialName: 'Nut & Bolt', price: '', isRepeatable: false },
+      { materialName: 'Side Grill', price: '', isRepeatable: false },
+      { materialName: 'Handle', price: '', isRepeatable: true },
+      { materialName: 'Hinges', price: '', isRepeatable: true },
+      { materialName: 'Wheel', price: '', isRepeatable: false },
+      { materialName: 'Lock', price: '', isRepeatable: true }
     ],
     compressor: [
-      { materialName: 'Compressor', price: 8500, isRepeatable: false },
-      { materialName: 'Condenser', price: 3200, isRepeatable: false },
-      { materialName: 'Motor', price: 1850, isRepeatable: false },
-      { materialName: 'Fan Blade', price: 450, isRepeatable: false },
-      { materialName: 'Temperature Controller', price: 1450, isRepeatable: false },
-      { materialName: 'Flexible Cable', price: 380, isRepeatable: false },
-      { materialName: 'Wire', price: 250, isRepeatable: false },
-      { materialName: 'Wire Pin', price: 90, isRepeatable: false },
-      { materialName: 'Brazing Rod', price: 350, isRepeatable: false },
-      { materialName: 'Gas Can', price: 650, isRepeatable: false },
-      { materialName: 'NRV', price: 180, isRepeatable: false },
-      { materialName: 'Gas Kit', price: 850, isRepeatable: false },
-      { materialName: 'Magnet', price: 280, isRepeatable: false },
-      { materialName: 'Capillary', price: 160, isRepeatable: false }
+      { materialName: 'Compressor', price: '', isRepeatable: false },
+      { materialName: 'Condenser', price: '', isRepeatable: false },
+      { materialName: 'Motor', price: '', isRepeatable: false },
+      { materialName: 'Fan Blade', price: '', isRepeatable: false },
+      { materialName: 'Temperature Controller', price: '', isRepeatable: false },
+      { materialName: 'Flexible Cable', price: '', isRepeatable: false },
+      { materialName: 'Wire', price: '', isRepeatable: false },
+      { materialName: 'Wire Pin', price: '', isRepeatable: false },
+      { materialName: 'Brazing Rod', price: '', isRepeatable: false },
+      { materialName: 'Gas Can', price: '', isRepeatable: false },
+      { materialName: 'NRV', price: '', isRepeatable: false },
+      { materialName: 'Gas Kit', price: '', isRepeatable: false },
+      { materialName: 'Magnet', price: '', isRepeatable: false },
+      { materialName: 'Capillary', price: '', isRepeatable: false }
     ]
   },
 
@@ -1160,9 +1211,9 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Table Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Round Garbage Shute', grade: '304', gauge: 1.2, isRepeatable: false },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Overhead Shelf', grade: '304', gauge: 1.2, isRepeatable: true }
     ],
     pipes: [
@@ -1173,7 +1224,7 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Bush', price: 50, isRepeatable: false }
+      { materialName: 'Bush', price: '', isRepeatable: false }
     ]
   },
 
@@ -1184,9 +1235,9 @@ export const COUNTER_CONFIG = {
     sheets: [
       { materialName: 'Top', grade: '304', gauge: 1.2, isRepeatable: false },
       { materialName: 'Under Shelf', grade: '304', gauge: 1.2, isRepeatable: true },
-      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
-      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Left Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Right Covering', grade: '304', gauge: 1.0, isRepeatable: false },
+      { materialName: 'Front Covering', grade: '304', gauge: 1.0, isRepeatable: false },
       { materialName: 'Door', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Drawer', grade: '304', gauge: 1.0, isRepeatable: true },
       { materialName: 'Roof', grade: '304', gauge: 1.0, isRepeatable: false }
@@ -1199,14 +1250,14 @@ export const COUNTER_CONFIG = {
     ],
     angles: [],
     purchased: [
-      { materialName: 'Sharma Burner', price: 1250, isRepeatable: true },
-      { materialName: 'Thali', price: 420, isRepeatable: false },
-      { materialName: 'Bar', price: 220, dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'Pipe Regulator', price: 380, isRepeatable: false },
-      { materialName: 'Copper Pipe', price: 350, dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
-      { materialName: 'NCV', price: 120, isRepeatable: false },
-      { materialName: 'Gas Manifold', price: 450, isRepeatable: false },
-      { materialName: 'Mixing Tube', price: 320, dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true }
+      { materialName: 'Sharma Burner', price: '', isRepeatable: true },
+      { materialName: 'Thali', price: '', isRepeatable: false },
+      { materialName: 'Bar', price: '', dropdownOptions: ['8 mm', '10 mm', '12 mm'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'Pipe Regulator', price: '', isRepeatable: false },
+      { materialName: 'Copper Pipe', price: '', dropdownOptions: ['1 ft', '1.5 ft', '2 ft', '2.5 ft', '3 ft'], allowMultiple: true, isRepeatable: true },
+      { materialName: 'NCV', price: '', isRepeatable: false },
+      { materialName: 'Gas Manifold', price: '', isRepeatable: false },
+      { materialName: 'Mixing Tube', price: '', dropdownOptions: ['G8', 'G9', 'G10', 'T22', 'T30', 'T33', 'T35'], allowMultiple: true, isRepeatable: true }
     ]
   }
 };
@@ -1247,8 +1298,10 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       configKey = 'Gas Range';
     } else if (target.includes('Shawarma')) {
       configKey = 'Shawarma Cabin';
+    } else if (target.includes('Chapati')) {
+      configKey = 'Chapati Puffer Plate';
     } else if (target.includes('Storage') || target.includes('Onion') || target.includes('Potato')) {
-      configKey = 'Storage';
+      configKey = 'Storage Bin';
     } else if (target.includes('Table')) {
       configKey = 'Working Table';
     } else if (target.includes('Dish Rack')) {
@@ -1257,8 +1310,8 @@ export function getFallbackCounterTemplate(counterTypeOrSubtype, explicitSubtype
       configKey = 'Bain Marie';
     } else if (target.includes('Tea Counter')) {
       configKey = 'Tea Counter';
-    } else if (target.includes('Round Pot') || target.includes('GN Pan')) {
-      configKey = 'GN Pan / Round Pot / Vessel';
+    } else if (target.includes('Round Pot') || target.includes('GN Pan') || target.includes('GN PAN')) {
+      configKey = 'GN PAN / ROUND POT';
     }
   }
 
