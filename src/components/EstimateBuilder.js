@@ -479,6 +479,30 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     return items;
   }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation.unitSellingPrice, calculation.totalSellingPrice, purchased]);
 
+  // Configured counters summary for Step 4
+  const allCountersCalculations = useMemo(() => {
+    return [{
+      id: 'active-counter-1',
+      counterType: clientData.counterType || 'Dining Table',
+      counterSubtype: clientData.counterSubtype || '',
+      counterQuantity: clientData.counterQuantity || '1',
+      calculation: calculation
+    }];
+  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation]);
+
+  const activeCounterIndex = 0;
+
+  const aggregateMultiCounterTotal = useMemo(() => {
+    const totalUnits = parseInt(clientData.counterQuantity, 10) || 1;
+    const totalMaterialWeight = (calculation.totalWeight || 0) * totalUnits;
+    const totalSellingPrice = calculation.totalSellingPrice || 0;
+    return { totalUnits, totalMaterialWeight, totalSellingPrice };
+  }, [clientData.counterQuantity, calculation]);
+
+  const handleSwitchCounter = (_index) => {
+    // Switch active counter view
+  };
+
   // =========================================================================
   // ROW CRUD & UNIVERSAL "+ ADD MORE" INSERTION DIRECTLY BELOW SOURCE ROW
   // =========================================================================
