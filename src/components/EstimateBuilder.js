@@ -200,8 +200,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   // Derive active counter type configuration
   const currentCounterConfig = useMemo(() => {
     if (!clientData.counterType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-    return COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-  }, [clientData.counterType]);
+    const base = COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
+    if (clientData.counterSubtype && COUNTER_TYPES_CONFIG[clientData.counterSubtype]) {
+      return {
+        ...base,
+        ...COUNTER_TYPES_CONFIG[clientData.counterSubtype]
+      };
+    }
+    return base;
+  }, [clientData.counterType, clientData.counterSubtype]);
 
   // Helper to check if a counter name is a Gas Range subtype
   const isGasRangeSubtype = (name) => {
@@ -215,6 +222,33 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       (n.startsWith('gas range ') && n !== 'gas range');
   };
 
+  // Canonical Counter Name Normalizer
+  const normalizeCounterName = (rawName) => {
+    const clean = (rawName || '').trim();
+    const lower = clean.toLowerCase();
+    if (lower === 'tea counter') return 'Tea Counter';
+    if (lower === 'counter' || lower === 'counters') return 'Counter';
+    if (lower === 'stainless steel kitchen' || lower === 'table' || lower === 'work table' || lower === 'working table') return 'Working Table';
+    if (lower === 'storage' || lower === 'storage bin') return 'Storage Bin';
+    if (lower === 'chapati plate' || lower === 'chapati puffer plate') return 'Chapati Puffer Plate';
+    if (lower.includes('bain merry') || lower.includes('bain marie')) return 'Bain Merry Marie';
+    if (lower.includes('gn pan') || lower.includes('round pot') || lower.includes('round. pot')) return 'GN PAN / ROUND POT';
+    if (lower === 'dish rack') return 'SS Dish Rack';
+    return clean;
+  };
+
+  // Helper to exclude all subtypes and legacy names from the active main dropdown
+  const isExcludedFromActiveDropdown = (name) => {
+    const n = (name || '').toLowerCase().trim();
+    if (!n) return true;
+    if (n === 'stainless steel kitchen') return true;
+    if (isGasRangeSubtype(n)) return true;
+    if (n === 'vegetable storage' || n === 'grain storage' || n.includes('onion') || n.includes('potato')) return true;
+    if (n === 'table top shawarma cabin' || n === 'half shawarma cabin' || n === 'full shawarma cabin') return true;
+    if (n.startsWith('vertical') || n.startsWith('work top') || n.includes('door') || n.includes('makeline')) return true;
+    return false;
+  };
+
   // Dynamically derive all available main counter types (Deduplicated strictly)
   const availableCounterTypes = useMemo(() => {
     const seen = new Set();
@@ -222,22 +256,22 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
     // First, standard counter types from constants
     COUNTER_TYPES.forEach(ct => {
-      const clean = ct.trim();
-      const lower = clean.toLowerCase();
-      if (!isGasRangeSubtype(clean) && !seen.has(lower)) {
+      const canonical = normalizeCounterName(ct);
+      const lower = canonical.toLowerCase();
+      if (!isExcludedFromActiveDropdown(canonical) && !seen.has(lower)) {
         seen.add(lower);
-        result.push(clean);
+        result.push(canonical);
       }
     });
 
     // Then master counter types from DB
     masterCounterTypes.forEach(ct => {
       if (ct.name && ct.status !== 'Inactive') {
-        const cleanName = ct.name.trim() === 'Table' ? 'Working Table' : ct.name.trim();
-        const lower = cleanName.toLowerCase();
-        if (!isGasRangeSubtype(cleanName) && !seen.has(lower)) {
+        const canonical = normalizeCounterName(ct.name);
+        const lower = canonical.toLowerCase();
+        if (!isExcludedFromActiveDropdown(canonical) && !seen.has(lower)) {
           seen.add(lower);
-          result.push(cleanName);
+          result.push(canonical);
         }
       }
     });
@@ -383,24 +417,41 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     });
   }, [sheets, pipes, angles, purchased, compressor, pricingInputs, clientData.counterQuantity]);
 
-  // Customer-Facing Quotation / Bill Line Items (Clean format per Requirement 13, 14, 31)
+  // Customer-Facing Quotation / Bill Line Items (Clean format per Requirement 37)
   const quotationBillItems = useMemo(() => {
     const mainEquipmentName = clientData.counterSubtype
       ? `${clientData.counterType || 'Commercial Kitchen Equipment'} (${clientData.counterSubtype})`
       : (clientData.counterType || 'Commercial Kitchen Equipment');
 
     const counterQty = Math.max(1, parseInt(clientData.counterQuantity, 10) || 1);
-    // Amount in bill row is Selling Price per Unit × Quantity
-    const rowAmount = calculation.totalSellingPrice;
+    const unitRate = calculation.unitSellingPrice || 0;
+    const rowAmount = calculation.totalSellingPrice || (unitRate * counterQty);
 
-    return [{
+    const items = [{
       srNo: 1,
-      counterName: mainEquipmentName,
+      particular: mainEquipmentName,
       quantity: counterQty,
-      rate: calculation.unitSellingPrice,
+      rate: unitRate,
       amount: rowAmount
     }];
-  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation.unitSellingPrice, calculation.totalSellingPrice]);
+
+    let idx = 2;
+    (purchased || []).forEach(p => {
+      if (p && parseFloat(p.quantity) > 0 && parseFloat(p.price) > 0) {
+        const q = parseFloat(p.quantity);
+        const r = parseFloat(p.price);
+        items.push({
+          srNo: idx++,
+          particular: p.size ? `${p.material} (${p.size})` : p.material,
+          quantity: q,
+          rate: r,
+          amount: q * r
+        });
+      }
+    });
+
+    return items;
+  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation.unitSellingPrice, calculation.totalSellingPrice, purchased]);
 
   // =========================================================================
   // ROW CRUD & UNIVERSAL "+ ADD MORE" INSERTION DIRECTLY BELOW SOURCE ROW
@@ -705,11 +756,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       date: new Date().toISOString().split('T')[0]
     });
     setPricingInputs({
-      sheetRate: '250',
-      pipeRate: '270',
-      angleRate: '220',
-      materialRate: '250',
-      labourRate: '100',
+      sheetRate: '',
+      pipeRate: '',
+      angleRate: '',
+      materialRate: '',
+      labourRate: '',
       labourCost: '',
       sellingPercentage: '',
       gst: '',
@@ -2506,9 +2557,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 <thead>
                   <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
                     <th className="py-2.5 px-3 text-center w-16">Sr. No.</th>
-                    <th className="py-2.5 px-3">Counter Name</th>
-                    <th className="py-2.5 px-3 text-center w-24">Qty</th>
-                    <th className="py-2.5 px-3 text-right w-40">Amount (₹)</th>
+                    <th className="py-2.5 px-3">Particular</th>
+                    <th className="py-2.5 px-3 text-center w-20">Qty</th>
+                    <th className="py-2.5 px-3 text-right w-28">Rate (₹)</th>
+                    <th className="py-2.5 px-3 text-right w-36">Amount (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
@@ -2518,10 +2570,13 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                         {item.srNo}
                       </td>
                       <td className="py-3 px-3">
-                        <span className="font-bold text-slate-900 text-xs">{item.counterName}</span>
+                        <span className="font-bold text-slate-900 text-xs">{item.particular}</span>
                       </td>
                       <td className="py-3 px-3 text-center font-black font-mono text-slate-800">
                         {item.quantity}
+                      </td>
+                      <td className="py-3 px-3 text-right font-medium font-mono text-slate-700 text-xs">
+                        {formatCurrency(item.rate)}
                       </td>
                       <td className="py-3 px-3 text-right font-black font-mono text-slate-900 text-xs">
                         {formatCurrency(item.amount)}
@@ -2529,10 +2584,33 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr className="bg-slate-900 text-white font-bold text-xs border-t-2 border-slate-900">
-                    <td colSpan={3} className="py-3 px-3 text-right uppercase tracking-wider font-black">
-                      TOTAL
+                <tfoot className="bg-slate-50 border-t-2 border-slate-300 divide-y divide-slate-200 text-xs">
+                  {calculation.gstAmount > 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-2 px-3 text-right font-semibold text-slate-700">
+                        GST ({calculation.gstPercent}%)
+                      </td>
+                      <td className="py-2 px-3 text-right font-black font-mono text-slate-900">
+                        {formatCurrency(calculation.gstAmount)}
+                      </td>
+                    </tr>
+                  )}
+                  {calculation.discount > 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-2 px-3 text-right font-semibold text-rose-600">
+                        Discount (₹)
+                      </td>
+                      <td className="py-2 px-3 text-right font-black font-mono text-rose-600">
+                        - {formatCurrency(calculation.discount)}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="bg-slate-900 text-white font-bold">
+                    <td colSpan={2} className="py-3 px-3 text-left font-bold text-[11px] text-slate-300">
+                      Total Quantity: <span className="text-white font-black">{quotationBillItems.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)}</span>
+                    </td>
+                    <td colSpan={2} className="py-3 px-3 text-right uppercase tracking-wider font-black">
+                      GRAND TOTAL
                     </td>
                     <td className="py-3 px-3 text-right font-black font-mono text-sm text-emerald-400">
                       {formatCurrency(calculation.finalTotal)}
