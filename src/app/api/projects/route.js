@@ -7,9 +7,10 @@ export async function GET(request) {
     const id = searchParams.get('id');
     const action = searchParams.get('action');
     const nextNumber = searchParams.get('nextEstimateNumber');
+    const testerId = searchParams.get('testerId') || request.headers.get('x-tester-id') || '';
     
     if (action === 'nextEstimateNumber' || nextNumber === 'true') {
-      const nextEst = await getNextEstimateNumber();
+      const nextEst = await getNextEstimateNumber(testerId);
       return NextResponse.json({ nextEstimateNumber: nextEst });
     }
     
@@ -21,7 +22,7 @@ export async function GET(request) {
       return NextResponse.json(project);
     }
     
-    const projects = await getProjects();
+    const projects = await getProjects(testerId);
     return NextResponse.json(projects);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -31,11 +32,16 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
+    const testerId = request.headers.get('x-tester-id') || body.testerId || '';
     const projectData = body.projectData || body;
     const materialsList = body.materialsList || [];
     
     if (!projectData || (!projectData.projectName && !projectData.customerName)) {
       return NextResponse.json({ error: 'Project Name or Customer Name is required' }, { status: 400 });
+    }
+
+    if (testerId && !projectData.testerId) {
+      projectData.testerId = testerId;
     }
     
     const newProject = await createProject(projectData, materialsList);

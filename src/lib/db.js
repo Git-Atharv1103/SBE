@@ -62,6 +62,7 @@ const CustomerSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true, index: true },
     address: { type: String, required: true },
     email: { type: String, default: '' },
+    testerId: { type: String, default: '', index: true },
   },
   { timestamps: true }
 );
@@ -81,6 +82,12 @@ const ProjectSchema = new mongoose.Schema(
     counterQuantity: { type: Number, default: 1 },
     date: { type: Date, default: Date.now, index: true },
     remarks: { type: String, default: '' },
+
+    // Multi-counter array support for commercial projects
+    counters: [{ type: mongoose.Schema.Types.Mixed }],
+
+    // Tester isolation key for safe staging environment
+    testerId: { type: String, default: '', index: true },
 
     // Dynamic material breakdowns (sheets, pipes, angles, purchased, compressor, 3D structures)
     sheets: [{ type: mongoose.Schema.Types.Mixed }],
@@ -139,14 +146,21 @@ if (!cached) {
 
 /**
  * Connect to MongoDB with connection pooling and resilient failover.
+ * Ensures the testing environment connects to shree_balaji_test_db to keep production data safe.
  * Returns true if connected to MongoDB, false if falling back to local JSON DB.
  */
 export async function connectDB() {
-  const uri = process.env.MONGODB_URI;
+  let uri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI;
 
   if (!uri || !uri.trim()) {
     initJsonDb();
     return false;
+  }
+
+  // Ensure staging/test environment targets isolated test database
+  const targetDbName = process.env.MONGODB_DB_NAME || 'shree_balaji_test_db';
+  if (!uri.includes(targetDbName) && uri.includes('shree_balaji_db')) {
+    uri = uri.replace(/\/shree_balaji_db(\?|$)/, `/${targetDbName}$1`);
   }
 
   if (cached.conn && mongoose.connection.readyState === 1) {
@@ -721,15 +735,18 @@ export async function deleteMaterial(id) {
 // -----------------------------------------------------------------------------
 // CUSTOMER REPOSITORY
 // -----------------------------------------------------------------------------
-export async function getCustomers() {
+export async function getCustomers(testerId = '') {
   const useMongo = await connectDB();
   const { Customer } = getModels();
 
   if (useMongo) {
-    return await Customer.find({}).sort({ customerName: 1 }).lean();
+    const query = testerId ? { $or: [{ testerId }, { testerId: '' }, { testerId: { $exists: false } }] } : {};
+    return await Customer.find(query).sort({ customerName: 1 }).lean();
   } else {
     const db = readJsonDb();
-    return db.customers || [];
+    const list = db.customers || [];
+    if (!testerId) return list;
+    return list.filter(c => !c.testerId || c.testerId === testerId);
   }
 }
 
@@ -790,16 +807,20 @@ export async function deleteCustomer(id) {
 // -----------------------------------------------------------------------------
 // PROJECTS / ESTIMATIONS REPOSITORY
 // -----------------------------------------------------------------------------
-export async function getNextEstimateNumber() {
+export async function getNextEstimateNumber(testerId = '') {
   const useMongo = await connectDB();
   const { Project } = getModels();
 
   let projects = [];
   if (useMongo) {
-    projects = await Project.find({}, { estimateNumber: 1 }).lean();
+    const query = testerId ? { $or: [{ testerId }, { testerId: '' }, { testerId: { $exists: false } }] } : {};
+    projects = await Project.find(query, { estimateNumber: 1 }).lean();
   } else {
     const db = readJsonDb();
     projects = db.projects || [];
+    if (testerId) {
+      projects = projects.filter(p => !p.testerId || p.testerId === testerId);
+    }
   }
 
   let maxSeq = 0;
@@ -818,15 +839,20 @@ export async function getNextEstimateNumber() {
   return `EST ${String(nextSeq).padStart(2, '0')}`;
 }
 
-export async function getProjects() {
+export async function getProjects(testerId = '') {
   const useMongo = await connectDB();
   const { Project } = getModels();
 
   if (useMongo) {
-    return await Project.find({}).sort({ date: -1, createdAt: -1 }).lean();
+    const query = testerId ? { $or: [{ testerId }, { testerId: '' }, { testerId: { $exists: false } }] } : {};
+    return await Project.find(query).sort({ date: -1, createdAt: -1 }).lean();
   } else {
     const db = readJsonDb();
-    return (db.projects || []).sort(
+    let list = db.projects || [];
+    if (testerId) {
+      list = list.filter(p => !p.testerId || p.testerId === testerId);
+    }
+    return list.sort(
       (a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)
     );
   }
@@ -850,7 +876,7 @@ export async function createProject(projectData) {
 
   let estimateNumber = projectData.estimateNumber ? String(projectData.estimateNumber).trim() : '';
   if (!estimateNumber || estimateNumber.startsWith('EST-')) {
-    estimateNumber = await getNextEstimateNumber();
+    estimateNumber = await getNextEstimateNumber(projectData.testerId || '');
   }
 
   const sheets = projectData.sheets || [];
@@ -858,6 +884,7 @@ export async function createProject(projectData) {
   const angles = projectData.angles || [];
   const purchased = projectData.purchased || [];
   const compressor = projectData.compressor || [];
+  const counters = projectData.counters || [];
 
   const record = {
     estimateNumber,
@@ -873,6 +900,8 @@ export async function createProject(projectData) {
     counterQuantity: Number(projectData.counterQuantity || 1),
     date: projectData.date || new Date().toISOString(),
     remarks: projectData.remarks || '',
+    testerId: projectData.testerId || '',
+    counters,
     sheets,
     pipes,
     angles,
@@ -930,6 +959,7 @@ export async function updateProject(id, projectData) {
   const angles = projectData.angles || [];
   const purchased = projectData.purchased || [];
   const compressor = projectData.compressor || [];
+  const counters = projectData.counters || [];
 
   const updateFields = {
     estimateNumber: projectData.estimateNumber,
@@ -945,6 +975,8 @@ export async function updateProject(id, projectData) {
     counterQuantity: Number(projectData.counterQuantity || 1),
     date: projectData.date,
     remarks: projectData.remarks || '',
+    testerId: projectData.testerId || '',
+    counters,
     sheets,
     pipes,
     angles,
@@ -1006,4 +1038,36 @@ export async function deleteProject(id) {
     writeJsonDb(db);
     return deleted;
   }
+}
+
+/**
+ * Safely reset/clear test data for a tester or all test estimates in the testing environment.
+ * NEVER deletes production data or master materials/categories.
+ */
+export async function resetTestData(testerId = '') {
+  const useMongo = await connectDB();
+  const { Project, Customer } = getModels();
+
+  if (useMongo && isMongoActive()) {
+    if (testerId) {
+      await Project.deleteMany({ testerId });
+      await Customer.deleteMany({ testerId });
+    } else {
+      // In staging database, clear all test projects and customers
+      await Project.deleteMany({});
+      await Customer.deleteMany({});
+    }
+  }
+
+  const db = readJsonDb();
+  if (testerId) {
+    db.projects = (db.projects || []).filter(p => p.testerId && p.testerId !== testerId);
+    db.customers = (db.customers || []).filter(c => c.testerId && c.testerId !== testerId);
+  } else {
+    db.projects = [];
+    db.customers = [];
+  }
+  writeJsonDb(db);
+
+  return { success: true, message: 'Test data cleared successfully.' };
 }

@@ -79,32 +79,114 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   const [masterCounterTypes, setMasterCounterTypes] = useState([]);
   const [isMasterLoading, setIsMasterLoading] = useState(true);
 
-  // Form State - Step 1: Client Data
+  // Form State - Step 1: Client Metadata (Retained across all counters for this client)
   const [clientData, setClientData] = useState({
     customerName: '',
     companyName: '',
     phone: '',
     email: '',
     address: '',
-    counterType: 'Dining Table',
-    counterSubtype: '',
-    counterQuantity: '1',
     estimateNumber: 'EST 01',
     date: new Date().toISOString().split('T')[0]
   });
   const [phoneTouched, setPhoneTouched] = useState(false);
 
+  // Multi-Counter State: Array of independent counters for this client
+  const [counters, setCounters] = useState([
+    {
+      id: 'counter-1',
+      counterType: 'Dining Table',
+      counterSubtype: '',
+      counterQuantity: '1',
+      sheets: [],
+      pipes: [],
+      angles: [],
+      purchased: [],
+      compressor: []
+    }
+  ]);
+  const [activeCounterIndex, setActiveCounterIndex] = useState(0);
+
+  // Active Counter helper reference
+  const activeCounter = counters[activeCounterIndex] || counters[0] || {
+    id: 'counter-1',
+    counterType: 'Dining Table',
+    counterSubtype: '',
+    counterQuantity: '1',
+    sheets: [],
+    pipes: [],
+    angles: [],
+    purchased: [],
+    compressor: []
+  };
+
+  const sheets = activeCounter.sheets || [];
+  const pipes = activeCounter.pipes || [];
+  const angles = activeCounter.angles || [];
+  const purchased = activeCounter.purchased || [];
+  const compressor = activeCounter.compressor || [];
+
+  // Update active counter state immutably
+  const updateActiveCounter = useCallback((updater) => {
+    setCounters(prev => {
+      const copy = [...prev];
+      const targetIdx = activeCounterIndex < copy.length ? activeCounterIndex : 0;
+      const current = copy[targetIdx] || {
+        id: `counter-${targetIdx + 1}`,
+        counterType: 'Dining Table',
+        counterSubtype: '',
+        counterQuantity: '1',
+        sheets: [],
+        pipes: [],
+        angles: [],
+        purchased: [],
+        compressor: []
+      };
+      const updated = typeof updater === 'function' ? updater(current) : { ...current, ...updater };
+      copy[targetIdx] = updated;
+      return copy;
+    });
+  }, [activeCounterIndex]);
+
+  const setSheets = (valOrFn) => {
+    updateActiveCounter(prev => ({
+      ...prev,
+      sheets: typeof valOrFn === 'function' ? valOrFn(prev.sheets || []) : valOrFn
+    }));
+  };
+
+  const setPipes = (valOrFn) => {
+    updateActiveCounter(prev => ({
+      ...prev,
+      pipes: typeof valOrFn === 'function' ? valOrFn(prev.pipes || []) : valOrFn
+    }));
+  };
+
+  const setAngles = (valOrFn) => {
+    updateActiveCounter(prev => ({
+      ...prev,
+      angles: typeof valOrFn === 'function' ? valOrFn(prev.angles || []) : valOrFn
+    }));
+  };
+
+  const setPurchased = (valOrFn) => {
+    updateActiveCounter(prev => ({
+      ...prev,
+      purchased: typeof valOrFn === 'function' ? valOrFn(prev.purchased || []) : valOrFn
+    }));
+  };
+
+  const setCompressor = (valOrFn) => {
+    updateActiveCounter(prev => ({
+      ...prev,
+      compressor: typeof valOrFn === 'function' ? valOrFn(prev.compressor || []) : valOrFn
+    }));
+  };
+
   // Phone Validation: mandatory, exactly 10 digits, numbers only
   const isPhoneValid = useMemo(() => {
     return /^\d{10}$/.test((clientData.phone || '').trim());
   }, [clientData.phone]);
-
-  // Form State - Step 2: Material Specifications
-  const [sheets, setSheets] = useState([]);
-  const [pipes, setPipes] = useState([]);
-  const [angles, setAngles] = useState([]);
-  const [purchased, setPurchased] = useState([]);
-  const [compressor, setCompressor] = useState([]);
 
   // Form State - Pricing & Financial Inputs
   const [pricingInputs, setPricingInputs] = useState({
@@ -200,22 +282,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
   // Derive active counter type configuration
   const currentCounterConfig = useMemo(() => {
-    if (!clientData.counterType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-    const base = COUNTER_TYPES_CONFIG[clientData.counterType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
-    const subtypeConfig = clientData.counterSubtype && COUNTER_TYPES_CONFIG[clientData.counterSubtype]
-      ? COUNTER_TYPES_CONFIG[clientData.counterSubtype]
+    const cType = activeCounter.counterType || '';
+    const cSubtype = activeCounter.counterSubtype || '';
+    if (!cType) return { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
+    const base = COUNTER_TYPES_CONFIG[cType] || { hasSubtypes: false, subtypes: [], hasDepth: false, requiresAngle: false };
+    const subtypeConfig = cSubtype && COUNTER_TYPES_CONFIG[cSubtype]
+      ? COUNTER_TYPES_CONFIG[cSubtype]
       : null;
 
     return {
       ...base,
       hasDepth: subtypeConfig?.hasDepth !== undefined ? subtypeConfig.hasDepth : base.hasDepth,
       requiresAngle: subtypeConfig?.requiresAngle !== undefined ? subtypeConfig.requiresAngle : base.requiresAngle,
-      // Retain parent hasSubtypes, subtypeLabel, and subtypes so the Subtype Dropdown stays visible and responsive
       hasSubtypes: Boolean(base.hasSubtypes),
-      subtypeLabel: base.subtypeLabel || (clientData.counterType === 'Gas Range' ? 'Gas Range Type' : (clientData.counterType === 'Shawarma Cabin' ? 'Shawarma Cabin Type' : 'Counter Subtype')),
+      subtypeLabel: base.subtypeLabel || (cType === 'Gas Range' ? 'Gas Range Type' : (cType === 'Shawarma Cabin' ? 'Shawarma Cabin Type' : 'Counter Subtype')),
       subtypes: base.subtypes || []
     };
-  }, [clientData.counterType, clientData.counterSubtype]);
+  }, [activeCounter.counterType, activeCounter.counterSubtype]);
 
   // Helper to check if a counter name is a Gas Range subtype
   const isGasRangeSubtype = (name) => {
@@ -246,8 +329,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   };
 
   const isTrollyType = useMemo(() => {
-    return (clientData.counterType || '').toLowerCase().includes('troll');
-  }, [clientData.counterType]);
+    return (activeCounter.counterType || '').toLowerCase().includes('troll');
+  }, [activeCounter.counterType]);
 
   const isRowDepthRequired = useCallback((row) => {
     if (!row) return false;
@@ -308,95 +391,140 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   // Load Material Component Structure for Selected Counter Type from Central Configuration
   const loadMaterialsForCounterType = useCallback((counterType, counterSubtype) => {
     if (!counterType) {
-      setSheets([]);
-      setPipes([]);
-      setAngles([]);
-      setPurchased([]);
-      setCompressor([]);
+      updateActiveCounter(prev => ({
+        ...prev,
+        sheets: [],
+        pipes: [],
+        angles: [],
+        purchased: [],
+        compressor: []
+      }));
       return;
     }
 
     const config = COUNTER_TYPES_CONFIG[counterType] || { hasSubtypes: false, subtypes: [] };
     if (config.hasSubtypes && !counterSubtype) {
-      setSheets([]);
-      setPipes([]);
-      setAngles([]);
-      setPurchased([]);
-      setCompressor([]);
+      updateActiveCounter(prev => ({
+        ...prev,
+        sheets: [],
+        pipes: [],
+        angles: [],
+        purchased: [],
+        compressor: []
+      }));
       return;
     }
 
     // Load from central fallback template (single source of truth)
     const template = getFallbackCounterTemplate(counterType, counterSubtype);
-    setSheets(JSON.parse(JSON.stringify(template.sheets || [])));
-    setPipes(JSON.parse(JSON.stringify(template.pipes || [])));
-    setAngles(JSON.parse(JSON.stringify(template.angles || [])));
-    setPurchased(JSON.parse(JSON.stringify(template.purchased || [])));
-    setCompressor(JSON.parse(JSON.stringify(template.compressor || [])));
-  }, []);
+    updateActiveCounter(prev => ({
+      ...prev,
+      sheets: JSON.parse(JSON.stringify(template.sheets || [])),
+      pipes: JSON.parse(JSON.stringify(template.pipes || [])),
+      angles: JSON.parse(JSON.stringify(template.angles || [])),
+      purchased: JSON.parse(JSON.stringify(template.purchased || [])),
+      compressor: JSON.parse(JSON.stringify(template.compressor || []))
+    }));
+  }, [updateActiveCounter]);
 
   // Handle Counter Type Selection Change in Step 1
   const handleCounterTypeChange = (newType) => {
     const config = COUNTER_TYPES_CONFIG[newType] || { hasSubtypes: false, subtypes: [] };
-    setClientData(prev => ({ ...prev, counterType: newType, counterSubtype: '' }));
     if (!config.hasSubtypes) {
-      loadMaterialsForCounterType(newType, '');
+      const template = getFallbackCounterTemplate(newType, '');
+      updateActiveCounter(prev => ({
+        ...prev,
+        counterType: newType,
+        counterSubtype: '',
+        sheets: JSON.parse(JSON.stringify(template.sheets || [])),
+        pipes: JSON.parse(JSON.stringify(template.pipes || [])),
+        angles: JSON.parse(JSON.stringify(template.angles || [])),
+        purchased: JSON.parse(JSON.stringify(template.purchased || [])),
+        compressor: JSON.parse(JSON.stringify(template.compressor || []))
+      }));
     } else {
-      setSheets([]);
-      setPipes([]);
-      setAngles([]);
-      setPurchased([]);
-      setCompressor([]);
+      updateActiveCounter(prev => ({
+        ...prev,
+        counterType: newType,
+        counterSubtype: '',
+        sheets: [],
+        pipes: [],
+        angles: [],
+        purchased: [],
+        compressor: []
+      }));
     }
   };
 
   // Handle Subtype Selection Change in Step 1
   const handleSubtypeChange = (newSubtype) => {
-    setClientData(prev => ({ ...prev, counterSubtype: newSubtype }));
     if (newSubtype) {
-      loadMaterialsForCounterType(clientData.counterType, newSubtype);
+      const template = getFallbackCounterTemplate(activeCounter.counterType, newSubtype);
+      updateActiveCounter(prev => ({
+        ...prev,
+        counterSubtype: newSubtype,
+        sheets: JSON.parse(JSON.stringify(template.sheets || [])),
+        pipes: JSON.parse(JSON.stringify(template.pipes || [])),
+        angles: JSON.parse(JSON.stringify(template.angles || [])),
+        purchased: JSON.parse(JSON.stringify(template.purchased || [])),
+        compressor: JSON.parse(JSON.stringify(template.compressor || []))
+      }));
     } else {
-      setSheets([]);
-      setPipes([]);
-      setAngles([]);
-      setPurchased([]);
-      setCompressor([]);
+      updateActiveCounter(prev => ({
+        ...prev,
+        counterSubtype: '',
+        sheets: [],
+        pipes: [],
+        angles: [],
+        purchased: [],
+        compressor: []
+      }));
     }
   };
 
   // Set default counter on initial mount if empty
   useEffect(() => {
-    if (!projectToEdit && sheets.length === 0 && clientData.counterType) {
-      loadMaterialsForCounterType(clientData.counterType, clientData.counterSubtype);
+    if (!projectToEdit && sheets.length === 0 && activeCounter.counterType) {
+      loadMaterialsForCounterType(activeCounter.counterType, activeCounter.counterSubtype);
     }
-  }, [projectToEdit, loadMaterialsForCounterType, clientData.counterType, clientData.counterSubtype, sheets.length]);
+  }, [projectToEdit, loadMaterialsForCounterType, activeCounter.counterType, activeCounter.counterSubtype, sheets.length]);
 
   // Initialize or Reopen Project
   useEffect(() => {
     if (projectToEdit) {
-      const cType = projectToEdit.counterType === 'Working Table' || projectToEdit.counterType === 'Table' ? 'Dining Table' : (projectToEdit.counterType || 'Dining Table');
       setClientData({
         customerName: projectToEdit.customerName || '',
         companyName: projectToEdit.companyName || '',
         phone: projectToEdit.phone || '',
         email: projectToEdit.email || '',
         address: projectToEdit.address || '',
-        counterType: cType,
-        counterSubtype: projectToEdit.counterSubtype || '',
-        counterQuantity: projectToEdit.counterQuantity ? String(projectToEdit.counterQuantity) : '1',
         estimateNumber: projectToEdit.estimateNumber || 'EST 01',
         date: projectToEdit.date ? new Date(projectToEdit.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       });
       setPhoneTouched(true);
 
-      setSheets(projectToEdit.sheets || []);
-      setPipes(projectToEdit.pipes || []);
-      setAngles(projectToEdit.angles || []);
-      setPurchased(projectToEdit.purchased || []);
-      setCompressor(projectToEdit.compressor || []);
+      if (Array.isArray(projectToEdit.counters) && projectToEdit.counters.length > 0) {
+        setCounters(projectToEdit.counters);
+        setActiveCounterIndex(0);
+      } else {
+        const cType = projectToEdit.counterType === 'Working Table' || projectToEdit.counterType === 'Table' ? 'Dining Table' : (projectToEdit.counterType || 'Dining Table');
+        const singleCounter = {
+          id: 'counter-1',
+          counterType: cType,
+          counterSubtype: projectToEdit.counterSubtype || '',
+          counterQuantity: projectToEdit.counterQuantity ? String(projectToEdit.counterQuantity) : '1',
+          sheets: projectToEdit.sheets || [],
+          pipes: projectToEdit.pipes || [],
+          angles: projectToEdit.angles || [],
+          purchased: projectToEdit.purchased || [],
+          compressor: projectToEdit.compressor || []
+        };
+        setCounters([singleCounter]);
+        setActiveCounterIndex(0);
+      }
 
       setPricingInputs({
-        sheetRate: projectToEdit.sheetRate !== undefined && projectToEdit.sheetRate !== null && projectToEdit.sheetRate !== '' ? String(projectToEdit.sheetRate) : (projectToEdit.materialRate ? String(projectToEdit.materialRate) : ''),
+        sheetRate: projectToEdit.sheetRate !== undefined && projectToEdit.sheetRate !== null && projectToEdit.sheetRate !== '' ? String(projectToEdit.sheetRate) : '',
         pipeRate: projectToEdit.pipeRate !== undefined && projectToEdit.pipeRate !== null && projectToEdit.pipeRate !== '' ? String(projectToEdit.pipeRate) : '',
         angleRate: projectToEdit.angleRate !== undefined && projectToEdit.angleRate !== null && projectToEdit.angleRate !== '' ? String(projectToEdit.angleRate) : '',
         materialRate: projectToEdit.materialRate !== undefined && projectToEdit.materialRate !== null && projectToEdit.materialRate !== '' ? String(projectToEdit.materialRate) : '',
@@ -417,14 +545,14 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     return String(val).replace(/^0+(?=\d)/, '');
   };
 
-  // Master Reactive Calculation Engine
+  // Master Reactive Calculation Engine for Active Counter
   const calculation = useMemo(() => {
     const matRate = (pricingInputs.materialRate !== '' && !isNaN(parseFloat(pricingInputs.materialRate)))
       ? parseFloat(pricingInputs.materialRate)
       : ((pricingInputs.sheetRate !== '' && !isNaN(parseFloat(pricingInputs.sheetRate))) ? parseFloat(pricingInputs.sheetRate) : 0);
     const lRate = (pricingInputs.labourRate !== '' && !isNaN(parseFloat(pricingInputs.labourRate))) ? parseFloat(pricingInputs.labourRate) : 0;
     const sPct = pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0;
-    const cQty = Math.max(1, parseInt(clientData.counterQuantity, 10) || 1);
+    const cQty = Math.max(1, parseInt(activeCounter.counterQuantity, 10) || 1);
     const disc = pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0;
     const gstVal = pricingInputs.gst !== '' ? pricingInputs.gst : '';
 
@@ -441,71 +569,161 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       discount: disc,
       gst: gstVal
     });
-  }, [sheets, pipes, angles, purchased, compressor, pricingInputs, clientData.counterQuantity]);
+  }, [sheets, pipes, angles, purchased, compressor, pricingInputs, activeCounter.counterQuantity]);
 
-  // Customer-Facing Quotation / Bill Line Items (Clean format per Requirement 37)
+  // Configured counters summary for Multi-Counter Estimation
+  const allCountersCalculations = useMemo(() => {
+    const matRate = (pricingInputs.materialRate !== '' && !isNaN(parseFloat(pricingInputs.materialRate)))
+      ? parseFloat(pricingInputs.materialRate)
+      : ((pricingInputs.sheetRate !== '' && !isNaN(parseFloat(pricingInputs.sheetRate))) ? parseFloat(pricingInputs.sheetRate) : 0);
+    const lRate = (pricingInputs.labourRate !== '' && !isNaN(parseFloat(pricingInputs.labourRate))) ? parseFloat(pricingInputs.labourRate) : 0;
+    const sPct = pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0;
+
+    return counters.map((c, idx) => {
+      const cQty = Math.max(1, parseInt(c.counterQuantity, 10) || 1);
+      const calc = calculateEstimate({
+        sheets: c.sheets || [],
+        pipes: c.pipes || [],
+        angles: c.angles || [],
+        purchased: c.purchased || [],
+        compressor: c.compressor || [],
+        materialRate: matRate,
+        labourRate: lRate,
+        sellingPercentage: sPct,
+        counterQuantity: cQty,
+        discount: 0,
+        gst: ''
+      });
+
+      return {
+        id: c.id || `counter-${idx + 1}`,
+        counterType: c.counterType || 'Dining Table',
+        counterSubtype: c.counterSubtype || '',
+        counterQuantity: String(cQty),
+        calculation: calc,
+        sheets: c.sheets || [],
+        pipes: c.pipes || [],
+        angles: c.angles || [],
+        purchased: c.purchased || [],
+        compressor: c.compressor || []
+      };
+    });
+  }, [counters, pricingInputs.materialRate, pricingInputs.sheetRate, pricingInputs.labourRate, pricingInputs.sellingPercentage]);
+
+  const aggregateMultiCounterTotal = useMemo(() => {
+    let totalUnits = 0;
+    let totalMaterialWeight = 0;
+    let totalSellingPrice = 0;
+
+    allCountersCalculations.forEach(c => {
+      const qty = parseInt(c.counterQuantity, 10) || 1;
+      totalUnits += qty;
+      totalMaterialWeight += (c.calculation.totalWeight || 0) * qty;
+      totalSellingPrice += (c.calculation.totalSellingPrice || 0);
+    });
+
+    const disc = pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0;
+    const gstPct = pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0;
+    const taxable = Math.max(0, totalSellingPrice - disc);
+    const gstAmount = (taxable * gstPct) / 100;
+    const finalGrandTotal = taxable + gstAmount;
+
+    return {
+      totalUnits,
+      totalMaterialWeight,
+      totalSellingPrice,
+      discount: disc,
+      gstPercent: gstPct,
+      gstAmount,
+      taxableAmount: taxable,
+      finalGrandTotal
+    };
+  }, [allCountersCalculations, pricingInputs.discount, pricingInputs.gst]);
+
+  // Customer-Facing Quotation / Bill Line Items
   const quotationBillItems = useMemo(() => {
-    const mainEquipmentName = clientData.counterSubtype
-      ? `${clientData.counterType || 'Commercial Kitchen Equipment'} (${clientData.counterSubtype})`
-      : (clientData.counterType || 'Commercial Kitchen Equipment');
+    const items = [];
+    let itemIdx = 1;
 
-    const counterQty = Math.max(1, parseInt(clientData.counterQuantity, 10) || 1);
-    const unitRate = calculation.unitSellingPrice || 0;
-    const rowAmount = calculation.totalSellingPrice || (unitRate * counterQty);
+    allCountersCalculations.forEach(c => {
+      const cName = c.counterSubtype
+        ? `${c.counterType || 'Commercial Kitchen Equipment'} (${c.counterSubtype})`
+        : (c.counterType || 'Commercial Kitchen Equipment');
+      const cQty = Math.max(1, parseInt(c.counterQuantity, 10) || 1);
+      const unitRate = c.calculation.unitSellingPrice || 0;
+      const rowAmount = c.calculation.totalSellingPrice || (unitRate * cQty);
 
-    const items = [{
-      srNo: 1,
-      particular: mainEquipmentName,
-      quantity: counterQty,
-      rate: unitRate,
-      amount: rowAmount
-    }];
+      items.push({
+        srNo: itemIdx++,
+        particular: cName,
+        quantity: cQty,
+        rate: unitRate,
+        amount: rowAmount
+      });
 
-    let idx = 2;
-    (purchased || []).forEach(p => {
-      if (p && parseFloat(p.quantity) > 0 && parseFloat(p.price) > 0) {
-        const q = parseFloat(p.quantity);
-        const r = parseFloat(p.price);
-        items.push({
-          srNo: idx++,
-          particular: p.size ? `${p.material} (${p.size})` : p.material,
-          quantity: q,
-          rate: r,
-          amount: q * r
-        });
-      }
+      (c.purchased || []).forEach(p => {
+        if (p && parseFloat(p.quantity) > 0 && parseFloat(p.price) > 0) {
+          const q = parseFloat(p.quantity);
+          const r = parseFloat(p.price);
+          items.push({
+            srNo: itemIdx++,
+            particular: p.size ? `${p.material} (${p.size})` : p.material,
+            quantity: q,
+            rate: r,
+            amount: q * r
+          });
+        }
+      });
     });
 
     return items;
-  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation.unitSellingPrice, calculation.totalSellingPrice, purchased]);
+  }, [allCountersCalculations]);
 
-  // Configured counters summary for Step 4
-  const allCountersCalculations = useMemo(() => {
-    return [{
-      id: 'active-counter-1',
-      counterType: clientData.counterType || 'Dining Table',
-      counterSubtype: clientData.counterSubtype || '',
-      counterQuantity: clientData.counterQuantity || '1',
-      calculation: calculation
-    }];
-  }, [clientData.counterType, clientData.counterSubtype, clientData.counterQuantity, calculation]);
+  // Multi-counter actions
+  const handleAddAnotherCounter = () => {
+    const newCounterId = `counter-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const template = getFallbackCounterTemplate('Dining Table', '');
+    const newCounter = {
+      id: newCounterId,
+      counterType: 'Dining Table',
+      counterSubtype: '',
+      counterQuantity: '1',
+      sheets: JSON.parse(JSON.stringify(template.sheets || [])),
+      pipes: JSON.parse(JSON.stringify(template.pipes || [])),
+      angles: JSON.parse(JSON.stringify(template.angles || [])),
+      purchased: JSON.parse(JSON.stringify(template.purchased || [])),
+      compressor: JSON.parse(JSON.stringify(template.compressor || []))
+    };
 
-  const activeCounterIndex = 0;
+    const nextIndex = counters.length;
+    setCounters(prev => [...prev, newCounter]);
+    setActiveCounterIndex(nextIndex);
+    setCurrentStep(1);
+    showStatus('success', `Created Counter #${nextIndex + 1}. Please select Counter Type & Specifications.`);
+  };
 
-  const aggregateMultiCounterTotal = useMemo(() => {
-    const totalUnits = parseInt(clientData.counterQuantity, 10) || 1;
-    const totalMaterialWeight = (calculation.totalWeight || 0) * totalUnits;
-    const totalSellingPrice = calculation.totalSellingPrice || 0;
-    return { totalUnits, totalMaterialWeight, totalSellingPrice };
-  }, [clientData.counterQuantity, calculation]);
+  const handleSwitchCounter = (index) => {
+    if (index >= 0 && index < counters.length) {
+      setActiveCounterIndex(index);
+    }
+  };
 
-  const handleSwitchCounter = (_index) => {
-    // Switch active counter view
+  const handleRemoveCounter = (index) => {
+    if (counters.length <= 1) {
+      showStatus('warning', 'Estimate must have at least one counter.');
+      return;
+    }
+    const counterToRemove = counters[index];
+    const name = counterToRemove.counterType || `Counter ${index + 1}`;
+    setCounters(prev => prev.filter((_, i) => i !== index));
+    if (activeCounterIndex >= index) {
+      setActiveCounterIndex(Math.max(0, activeCounterIndex - 1));
+    }
+    showStatus('success', `Removed ${name} from estimate.`);
   };
 
   // =========================================================================
   // ROW CRUD & UNIVERSAL "+ ADD MORE" INSERTION DIRECTLY BELOW SOURCE ROW
-  // =========================================================================
 
   // 1. Sheet Rows
   const updateSheetRow = (index, field, value) => {
@@ -782,6 +1000,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
   };
 
   // Action: + New Counter
+  // Action: + New Counter / Reset Workspace
   const handleResetNewCounter = async () => {
     let nextNum = 'EST 01';
     try {
@@ -800,9 +1019,6 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       phone: '',
       email: '',
       address: '',
-      counterType: 'Dining Table',
-      counterSubtype: '',
-      counterQuantity: '1',
       estimateNumber: nextNum,
       date: new Date().toISOString().split('T')[0]
     });
@@ -817,34 +1033,37 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       gst: '',
       discount: ''
     });
-    loadMaterialsForCounterType('Dining Table', '');
+    const template = getFallbackCounterTemplate('Dining Table', '');
+    setCounters([
+      {
+        id: 'counter-1',
+        counterType: 'Dining Table',
+        counterSubtype: '',
+        counterQuantity: '1',
+        sheets: JSON.parse(JSON.stringify(template.sheets || [])),
+        pipes: JSON.parse(JSON.stringify(template.pipes || [])),
+        angles: JSON.parse(JSON.stringify(template.angles || [])),
+        purchased: JSON.parse(JSON.stringify(template.purchased || [])),
+        compressor: JSON.parse(JSON.stringify(template.compressor || []))
+      }
+    ]);
+    setActiveCounterIndex(0);
     setCurrentStep(1);
-    showStatus('success', `Reset workspace for New Counter Estimate (${nextNum}).`);
+    showStatus('success', `Reset workspace for New Estimate (${nextNum}).`);
   };
 
-  // Action: Save Project / Save Estimate (Section 35)
+  // Action: Save Project / Save Estimate (Preserves multi-counter configuration)
   const handleSaveProject = async () => {
     if (!clientData.customerName.trim()) {
       showStatus('warning', 'Please provide a Customer Name in Step 1.');
       setCurrentStep(1);
       return;
     }
-    if (!clientData.counterType) {
-      showStatus('warning', 'Please select a Counter Type in Step 1.');
-      setCurrentStep(1);
-      return;
-    }
-    if (currentCounterConfig.hasSubtypes && !clientData.counterSubtype) {
-      showStatus('warning', `Please select ${currentCounterConfig.subtypeLabel} in Step 1.`);
-      setCurrentStep(1);
-      return;
-    }
 
     try {
       setLoading(true);
-      const displayProjectName = clientData.counterSubtype
-        ? `${clientData.counterType} (${clientData.counterSubtype}) - ${clientData.customerName}`
-        : `${clientData.counterType} - ${clientData.customerName}`;
+      const counterNames = counters.map(c => c.counterSubtype ? `${c.counterType} (${c.counterSubtype})` : c.counterType).filter(Boolean).join(' + ') || 'Commercial Counter';
+      const displayProjectName = `${counterNames} - ${clientData.customerName}`;
 
       const payload = {
         projectData: {
@@ -855,10 +1074,24 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           phone: clientData.phone,
           email: clientData.email,
           address: clientData.address,
-          counterType: clientData.counterType,
-          counterSubtype: clientData.counterSubtype,
-          counterQuantity: Number(clientData.counterQuantity || 1),
+          counterType: activeCounter.counterType || 'Dining Table',
+          counterSubtype: activeCounter.counterSubtype || '',
+          counterQuantity: Number(activeCounter.counterQuantity || 1),
           date: clientData.date,
+          counters: allCountersCalculations.map(c => ({
+            id: c.id,
+            counterType: c.counterType,
+            counterSubtype: c.counterSubtype,
+            counterQuantity: Number(c.counterQuantity || 1),
+            sheets: c.sheets,
+            pipes: c.pipes,
+            angles: c.angles,
+            purchased: c.purchased,
+            compressor: c.compressor,
+            totalWeight: c.calculation.totalWeight,
+            unitSellingPrice: c.calculation.unitSellingPrice,
+            totalSellingPrice: c.calculation.totalSellingPrice
+          })),
           sheets,
           pipes,
           angles,
@@ -867,28 +1100,20 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           totalSheetWeight: calculation.totalSheetWeight,
           totalPipeWeight: calculation.totalPipeWeight,
           totalAngleWeight: calculation.totalAngleWeight,
-          totalMaterialWeight: calculation.totalWeight,
-          sheetRate: parseFloat(pricingInputs.sheetRate) || parseFloat(pricingInputs.materialRate) || 250,
-          pipeRate: parseFloat(pricingInputs.pipeRate) || 270,
-          angleRate: parseFloat(pricingInputs.angleRate) || 220,
-          materialRate: parseFloat(pricingInputs.sheetRate) || parseFloat(pricingInputs.materialRate) || 250,
-          sheetCost: calculation.sheetCost,
-          pipeCost: calculation.pipeCost,
-          angleCost: calculation.angleCost,
-          materialCost: calculation.materialCost,
+          totalMaterialWeight: aggregateMultiCounterTotal.totalMaterialWeight,
+          materialRate: parseFloat(pricingInputs.materialRate) || 0,
           labourRate: parseFloat(pricingInputs.labourRate) || 0,
           labourCost: calculation.labourCost,
-          purchasedItemCost: calculation.purchasedItemCost,
-          subtotal: calculation.subtotal,
+          subtotal: aggregateMultiCounterTotal.totalSellingPrice,
           sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
           sellingAmount: calculation.sellingAmount || 0,
-          sellingPrice: calculation.unitSellingPrice,
+          sellingPrice: aggregateMultiCounterTotal.totalSellingPrice,
           gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
-          gstAmount: calculation.gstAmount,
+          gstAmount: aggregateMultiCounterTotal.gstAmount,
           discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
-          finalTotal: calculation.finalTotal,
-          grandTotal: calculation.finalTotal,
-          totalAmount: calculation.finalTotal
+          finalTotal: aggregateMultiCounterTotal.finalGrandTotal,
+          grandTotal: aggregateMultiCounterTotal.finalGrandTotal,
+          totalAmount: aggregateMultiCounterTotal.finalGrandTotal
         }
       };
 
@@ -919,20 +1144,10 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     }
   };
 
-  // Action: Generate Bill / Download Quotation PDF (Section 35)
+  // Action: Generate Bill / Download Quotation PDF
   const handleGeneratePDF = () => {
     if (!clientData.customerName.trim()) {
       showStatus('warning', 'Please provide a Customer Name in Step 1.');
-      setCurrentStep(1);
-      return;
-    }
-    if (!clientData.counterType) {
-      showStatus('warning', 'Please select a Counter Type in Step 1.');
-      setCurrentStep(1);
-      return;
-    }
-    if (currentCounterConfig.hasSubtypes && !clientData.counterSubtype) {
-      showStatus('warning', `Please select ${currentCounterConfig.subtypeLabel} in Step 1.`);
       setCurrentStep(1);
       return;
     }
@@ -940,22 +1155,37 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
     try {
       generateQuotationPDF({
         ...clientData,
+        counterType: activeCounter.counterType,
+        counterSubtype: activeCounter.counterSubtype,
+        counters: allCountersCalculations.map(c => ({
+          counterType: c.counterType,
+          counterSubtype: c.counterSubtype,
+          counterQuantity: c.counterQuantity,
+          unitSellingPrice: c.calculation.unitSellingPrice,
+          totalSellingPrice: c.calculation.totalSellingPrice,
+          totalWeight: c.calculation.totalWeight,
+          sheets: c.sheets,
+          pipes: c.pipes,
+          angles: c.angles,
+          purchased: c.purchased,
+          compressor: c.compressor
+        })),
         sheets,
         pipes,
         angles,
         purchased,
         compressor,
-        totalMaterialWeight: calculation.totalWeight,
+        totalMaterialWeight: aggregateMultiCounterTotal.totalMaterialWeight,
         materialRate: parseFloat(pricingInputs.materialRate) || 0,
         labourRate: parseFloat(pricingInputs.labourRate) || 0,
         labourCost: calculation.labourCost,
-        subtotal: calculation.subtotal,
+        subtotal: aggregateMultiCounterTotal.totalSellingPrice,
         sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
-        sellingPrice: calculation.unitSellingPrice,
-        counterQuantity: clientData.counterQuantity || '1',
+        sellingPrice: aggregateMultiCounterTotal.totalSellingPrice,
+        counterQuantity: String(aggregateMultiCounterTotal.totalUnits),
         discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
         gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
-        finalTotal: calculation.finalTotal
+        finalTotal: aggregateMultiCounterTotal.finalGrandTotal
       }, { shouldPrint: false });
       showStatus('success', 'Quotation / Bill generated and downloaded.');
     } catch (e) {
@@ -971,36 +1201,41 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
       setCurrentStep(1);
       return;
     }
-    if (!clientData.counterType) {
-      showStatus('warning', 'Please select a Counter Type in Step 1.');
-      setCurrentStep(1);
-      return;
-    }
-    if (currentCounterConfig.hasSubtypes && !clientData.counterSubtype) {
-      showStatus('warning', `Please select ${currentCounterConfig.subtypeLabel} in Step 1.`);
-      setCurrentStep(1);
-      return;
-    }
 
     try {
       generateQuotationPDF({
         ...clientData,
+        counterType: activeCounter.counterType,
+        counterSubtype: activeCounter.counterSubtype,
+        counters: allCountersCalculations.map(c => ({
+          counterType: c.counterType,
+          counterSubtype: c.counterSubtype,
+          counterQuantity: c.counterQuantity,
+          unitSellingPrice: c.calculation.unitSellingPrice,
+          totalSellingPrice: c.calculation.totalSellingPrice,
+          totalWeight: c.calculation.totalWeight,
+          sheets: c.sheets,
+          pipes: c.pipes,
+          angles: c.angles,
+          purchased: c.purchased,
+          compressor: c.compressor
+        })),
         sheets,
         pipes,
         angles,
         purchased,
         compressor,
-        totalMaterialWeight: calculation.totalWeight,
+        totalMaterialWeight: aggregateMultiCounterTotal.totalMaterialWeight,
         materialRate: parseFloat(pricingInputs.materialRate) || 0,
         labourRate: parseFloat(pricingInputs.labourRate) || 0,
         labourCost: calculation.labourCost,
-        subtotal: calculation.subtotal,
+        subtotal: aggregateMultiCounterTotal.totalSellingPrice,
         sellingPercentage: pricingInputs.sellingPercentage !== '' ? (parseFloat(pricingInputs.sellingPercentage) || 0) : 0,
-        sellingPrice: calculation.unitSellingPrice,
-        counterQuantity: clientData.counterQuantity || '1',
+        sellingPrice: aggregateMultiCounterTotal.totalSellingPrice,
+        counterQuantity: String(aggregateMultiCounterTotal.totalUnits),
         discount: pricingInputs.discount !== '' ? (parseFloat(pricingInputs.discount) || 0) : 0,
         gst: pricingInputs.gst !== '' ? (parseFloat(pricingInputs.gst) || 0) : 0,
-        finalTotal: calculation.finalTotal
+        finalTotal: aggregateMultiCounterTotal.finalGrandTotal
       }, { shouldPrint: true });
     } catch (e) {
       console.error('Print Error:', e);
@@ -1083,6 +1318,60 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             {projectToEdit ? 'Update Estimate' : 'Save Estimate'}
           </button>
         </div>
+      </div>
+
+      {/* Multi-Counter Switcher Tab Bar */}
+      <div className="bg-slate-100/90 border border-slate-200/90 rounded-2xl p-2.5 mb-5 flex items-center justify-between gap-3 shadow-2xs overflow-x-auto">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider px-2">
+            Counters ({counters.length}):
+          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {counters.map((c, idx) => {
+              const isActive = idx === activeCounterIndex;
+              const displayName = `${idx + 1}. ${c.counterType || 'Counter'}${c.counterSubtype ? ` (${c.counterSubtype})` : ''}`;
+              return (
+                <div
+                  key={c.id || idx}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    isActive
+                      ? 'bg-slate-900 text-white border-slate-800 shadow-xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 cursor-pointer'
+                  }`}
+                  onClick={() => handleSwitchCounter(idx)}
+                >
+                  <span>{displayName}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    ×{c.counterQuantity || 1}
+                  </span>
+                  {counters.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveCounter(idx);
+                      }}
+                      className="ml-1 text-slate-400 hover:text-rose-400 p-0.5 rounded cursor-pointer"
+                      title="Remove this counter"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleAddAnotherCounter}
+          className="btn-3d btn-3d-emerald px-3 py-1.5 text-xs flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs"
+          title="Add another commercial counter for this customer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          + Add Counter
+        </button>
       </div>
 
       {/* 4-Step Wizard Navigation */}
@@ -1251,16 +1540,16 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               />
             </div>
 
-            {/* Counter Type Selector (Renamed Table -> Working Table, Bain Marie, etc.) */}
+            {/* Counter Type Selector */}
             <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="block text-[11px] font-black text-slate-900 uppercase tracking-wider">
-                  Select Counter Type *
+                  Select Counter Type * (Counter {activeCounterIndex + 1})
                 </label>
                 <span className="text-[10px] text-blue-600 font-bold">Standard Templates</span>
               </div>
               <select
-                value={clientData.counterType}
+                value={activeCounter.counterType || ''}
                 onChange={(e) => handleCounterTypeChange(e.target.value)}
                 className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 focus:outline-none text-xs font-black shadow-2xs cursor-pointer"
               >
@@ -1271,7 +1560,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
               </select>
             </div>
 
-            {/* Conditionally Render Subtype Selector (Storage Bin, Fridge, Pizza Makeline, Work Top, Gas Range, Shawarma) */}
+            {/* Conditionally Render Subtype Selector */}
             {currentCounterConfig.hasSubtypes ? (
               <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-300 space-y-2 animate-in fade-in duration-200 shadow-2xs">
                 <div className="flex items-center justify-between">
@@ -1281,7 +1570,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   <span className="text-[10px] text-blue-700 font-bold">Required</span>
                 </div>
                 <select
-                  value={clientData.counterSubtype}
+                  value={activeCounter.counterSubtype || ''}
                   onChange={(e) => handleSubtypeChange(e.target.value)}
                   className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-xs font-black shadow-2xs cursor-pointer"
                 >
@@ -1301,8 +1590,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   min="1"
                   step="1"
                   placeholder="1"
-                  value={clientData.counterQuantity || '1'}
-                  onChange={(e) => setClientData({ ...clientData, counterQuantity: sanitizeNumericInput(e.target.value) || '1' })}
+                  value={activeCounter.counterQuantity || '1'}
+                  onChange={(e) => updateActiveCounter(prev => ({ ...prev, counterQuantity: sanitizeNumericInput(e.target.value) || '1' }))}
                   className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:outline-none text-xs font-bold shadow-2xs"
                 />
               </div>
@@ -1318,8 +1607,8 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   min="1"
                   step="1"
                   placeholder="1"
-                  value={clientData.counterQuantity || '1'}
-                  onChange={(e) => setClientData({ ...clientData, counterQuantity: sanitizeNumericInput(e.target.value) || '1' })}
+                  value={activeCounter.counterQuantity || '1'}
+                  onChange={(e) => updateActiveCounter(prev => ({ ...prev, counterQuantity: sanitizeNumericInput(e.target.value) || '1' }))}
                   className="w-full bg-white text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:outline-none text-xs font-bold shadow-2xs"
                 />
               </div>
@@ -1328,7 +1617,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
 
           <div className="flex items-center justify-end pt-6 border-t border-slate-100 mt-6">
             <button
-              disabled={!clientData.customerName.trim() || !isPhoneValid || !clientData.counterType || (currentCounterConfig.hasSubtypes && !clientData.counterSubtype)}
+              disabled={!clientData.customerName.trim() || !isPhoneValid || !activeCounter.counterType || (currentCounterConfig.hasSubtypes && !activeCounter.counterSubtype)}
               onClick={() => {
                 setPhoneTouched(true);
                 if (!clientData.customerName.trim()) {
@@ -1339,11 +1628,11 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   showStatus('warning', 'Enter a valid 10-digit mobile number.');
                   return;
                 }
-                if (!clientData.counterType) {
+                if (!activeCounter.counterType) {
                   showStatus('warning', 'Please select a Counter Type.');
                   return;
                 }
-                if (currentCounterConfig.hasSubtypes && !clientData.counterSubtype) {
+                if (currentCounterConfig.hasSubtypes && !activeCounter.counterSubtype) {
                   showStatus('warning', `Please select ${currentCounterConfig.subtypeLabel}.`);
                   return;
                 }
@@ -1589,8 +1878,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                   className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs text-right font-bold"
                                 />
                               </td>
-                              <td className="py-2 px-3 text-center text-slate-400 font-bold">
-                                inch
+                              <td className="py-2 px-3 text-center">
+                                <select
+                                  value={row.unit || 'INCH'}
+                                  onChange={(e) => updateSheetRow(idx, 'unit', e.target.value)}
+                                  className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-1 py-1 rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none text-xs font-bold cursor-pointer text-center"
+                                >
+                                  <option value="INCH">INCH</option>
+                                  <option value="FT">FT</option>
+                                </select>
                               </td>
                               <td className="py-2 px-3 text-right font-black text-teal-700">
                                 {formatWeight(rowWeight)}
@@ -1883,8 +2179,15 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                                     className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs text-right font-semibold"
                                   />
                                 </td>
-                                <td className="py-2 px-3 text-center text-slate-400 font-bold">
-                                  {row.unit || 'ft'}
+                                <td className="py-2 px-3 text-center">
+                                  <select
+                                    value={row.unit || 'ft'}
+                                    onChange={(e) => updateAngleRow(idx, 'unit', e.target.value)}
+                                    className="w-full bg-slate-50/50 focus:bg-white text-slate-900 px-1 py-1 rounded-lg border border-slate-200 focus:border-amber-500 focus:outline-none text-xs font-bold cursor-pointer text-center"
+                                  >
+                                    <option value="ft">ft</option>
+                                    <option value="inch">inch</option>
+                                  </select>
                                 </td>
                                 <td className="py-2 px-3">
                                   <input
@@ -2188,7 +2491,6 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
           </div>
         </div>
       )}
-
       {/* ========================================================================= */}
       {/* STEP 3 — WEIGHT SUMMARY & INTERNAL COST */}
       {/* ========================================================================= */}
@@ -2415,7 +2717,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
             </div>
 
             {/* Step 3 Bottom Navigation Buttons */}
-            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between">
+            <div className="pt-6 mt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <button
                 onClick={() => setCurrentStep(2)}
                 className="btn-3d btn-3d-slate px-5 py-2.5 text-xs flex items-center gap-2 cursor-pointer"
@@ -2424,13 +2726,25 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 Back to Material Specification
               </button>
 
-              <button
-                onClick={() => setCurrentStep(4)}
-                className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
-              >
-                Continue to Selling Price & Final Estimate
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddAnotherCounter}
+                  className="btn-3d btn-3d-emerald px-5 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
+                  title="Save current counter and configure another counter for the same client"
+                >
+                  <Plus className="w-4 h-4" />
+                  + Add Another Counter
+                </button>
+
+                <button
+                  onClick={() => setCurrentStep(4)}
+                  className="btn-3d btn-3d-blue px-6 py-2.5 text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer"
+                >
+                  Continue to Selling Price & Final Estimate
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2461,9 +2775,19 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
                   Configured Counters for {clientData.customerName || 'Customer'}
                 </span>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-800 border border-violet-200">
-                  {allCountersCalculations.length} Counter(s) in Estimate
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-800 border border-violet-200">
+                    {allCountersCalculations.length} Counter(s) in Estimate
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddAnotherCounter}
+                    className="btn-3d btn-3d-emerald px-2.5 py-1 text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Counter
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
@@ -2472,7 +2796,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                     <tr className="bg-slate-50 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-200 text-[11px]">
                       <th className="py-2.5 px-3 text-center w-12">#</th>
                       <th className="py-2.5 px-3">Counter</th>
-                      <th className="py-2.5 px-3 text-center w-20">Qty</th>
+                      <th className="py-2.5 px-3 text-center w-24">Qty</th>
                       <th className="py-2.5 px-3 text-right w-28">Weight (kg)</th>
                       <th className="py-2.5 px-3 text-right w-32">Selling Price / Unit</th>
                       <th className="py-2.5 px-3 text-right w-36">Total Selling Price</th>
@@ -2492,7 +2816,23 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                               <span className="text-[10px] text-slate-500">{c.counterSubtype}</span>
                             )}
                           </td>
-                          <td className="py-3 px-3 text-center font-bold font-mono">{c.counterQuantity || 1}</td>
+                          <td className="py-3 px-3 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={c.counterQuantity || '1'}
+                              onChange={(e) => {
+                                const v = sanitizeNumericInput(e.target.value) || '1';
+                                setCounters(prev => {
+                                  const copy = [...prev];
+                                  if (copy[i]) copy[i] = { ...copy[i], counterQuantity: v };
+                                  return copy;
+                                });
+                              }}
+                              className="w-16 bg-slate-50 focus:bg-white text-slate-900 px-2 py-1 rounded-lg border border-slate-300 focus:border-violet-500 text-center font-bold text-xs"
+                            />
+                          </td>
                           <td className="py-3 px-3 text-right font-black font-mono text-amber-700">
                             {calc.totalWeight.toFixed(2)} kg
                           </td>
@@ -2518,87 +2858,68 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                       );
                     })}
                   </tbody>
-                  {allCountersCalculations.length > 1 && (
-                    <tfoot className="bg-slate-100/80 border-t-2 border-slate-300 text-xs font-bold">
-                      <tr>
-                        <td colSpan={2} className="py-2.5 px-3 text-slate-900 uppercase">Grand Summary</td>
-                        <td className="py-2.5 px-3 text-center font-black font-mono">{aggregateMultiCounterTotal.totalUnits}</td>
-                        <td className="py-2.5 px-3 text-right font-black font-mono text-amber-900">{aggregateMultiCounterTotal.totalMaterialWeight.toFixed(2)} kg</td>
-                        <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                        <td className="py-2.5 px-3 text-right font-black font-mono text-emerald-800">{formatCurrency(aggregateMultiCounterTotal.totalSellingPrice)}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  )}
+                  <tfoot className="bg-slate-100/80 border-t-2 border-slate-300 text-xs font-bold">
+                    <tr>
+                      <td colSpan={2} className="py-2.5 px-3 text-slate-900 uppercase">Grand Summary</td>
+                      <td className="py-2.5 px-3 text-center font-black font-mono">{aggregateMultiCounterTotal.totalUnits}</td>
+                      <td className="py-2.5 px-3 text-right font-black font-mono text-amber-900">{aggregateMultiCounterTotal.totalMaterialWeight.toFixed(2)} kg</td>
+                      <td className="py-2.5 px-3 text-right text-slate-500">—</td>
+                      <td className="py-2.5 px-3 text-right font-black font-mono text-emerald-800">{formatCurrency(aggregateMultiCounterTotal.totalSellingPrice)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
 
             {/* 4-Box Primary Selling Price Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {/* Box 1: Counter Name */}
+              {/* Box 1: Counter Details */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Counter Name
+                  Equipment Configured
                 </span>
-                <span className="text-sm font-black text-slate-900 block">
-                  {clientData.counterType || 'Dining Table'}
-                  {clientData.counterSubtype ? ` (${clientData.counterSubtype})` : ''}
+                <span className="text-sm font-black text-slate-900 block truncate">
+                  {counters.map(c => c.counterType).filter(Boolean).join(', ') || 'Dining Table'}
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium mt-1">Stainless Steel Commercial Unit</span>
+                <span className="text-[10px] text-slate-400 font-medium mt-1">{counters.length} Counter Item(s)</span>
               </div>
 
-              {/* Box 2: Counter Quantity Input (Editable in Step 4) */}
+              {/* Box 2: Total Units */}
               <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[10px] font-black text-blue-900 uppercase tracking-wider">
-                    Quantity
+                    Total Units
                   </label>
-                  <span className="text-[10px] text-blue-700 font-bold">Units</span>
+                  <span className="text-[10px] text-blue-700 font-bold">Qty</span>
                 </div>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="1"
-                  value={clientData.counterQuantity || '1'}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/\D/g, '');
-                    const parsed = parseInt(raw, 10);
-                    const safeVal = isNaN(parsed) || parsed < 1 ? '' : String(parsed);
-                    setClientData({ ...clientData, counterQuantity: safeVal });
-                  }}
-                  onBlur={() => {
-                    if (!clientData.counterQuantity || parseInt(clientData.counterQuantity, 10) < 1) {
-                      setClientData({ ...clientData, counterQuantity: '1' });
-                    }
-                  }}
-                  className="w-full bg-white text-slate-900 px-3 py-1.5 rounded-lg border border-blue-300 focus:border-blue-500 focus:outline-none text-base font-black text-center shadow-2xs"
-                />
-                <span className="text-[10px] text-blue-600 font-medium text-center mt-1">Quantity of counters</span>
+                <div className="text-xl font-black text-blue-900 font-mono">
+                  {aggregateMultiCounterTotal.totalUnits} Units
+                </div>
+                <span className="text-[10px] text-blue-600 font-medium mt-1">Across all counters</span>
               </div>
 
-              {/* Box 3: Selling Price per Unit */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Selling Price / Unit
+              {/* Box 3: Total Weight */}
+              <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block mb-1">
+                  Total Weight
                 </span>
-                <div className="text-lg font-black text-slate-800 font-mono">
-                  {formatCurrency(calculation.unitSellingPrice)}
+                <div className="text-lg font-black text-amber-800 font-mono">
+                  {aggregateMultiCounterTotal.totalMaterialWeight.toFixed(2)} kg
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium mt-1">Single counter unit price</span>
+                <span className="text-[10px] text-amber-700 font-medium mt-1">Total fabrication weight</span>
               </div>
 
               {/* Box 4: Total Selling Price */}
               <div className="p-4 rounded-xl bg-linear-to-b from-blue-50 to-indigo-50/60 border border-blue-300 flex flex-col justify-between">
                 <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block mb-1">
-                  Total Selling Price
+                  Subtotal Selling Price
                 </span>
                 <div className="text-lg font-black text-blue-800 font-mono tracking-tight">
-                  {formatCurrency(calculation.totalSellingPrice)}
+                  {formatCurrency(aggregateMultiCounterTotal.totalSellingPrice)}
                 </div>
                 <span className="text-[10px] text-blue-600 font-medium mt-1">
-                  {formatCurrency(calculation.unitSellingPrice)} × {calculation.counterQuantity}
+                  Before GST &amp; Discount
                 </span>
               </div>
             </div>
@@ -2627,7 +2948,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 </div>
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-200/60 font-semibold text-amber-900">
                   <span>GST Amount:</span>
-                  <span className="font-black font-mono">{formatCurrency(calculation.gstAmount)}</span>
+                  <span className="font-black font-mono">{formatCurrency(aggregateMultiCounterTotal.gstAmount)}</span>
                 </div>
               </div>
 
@@ -2653,7 +2974,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                 </div>
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-rose-200/60 font-semibold text-rose-900">
                   <span>Applied Discount:</span>
-                  <span className="font-black font-mono">{formatCurrency(calculation.discount)}</span>
+                  <span className="font-black font-mono">{formatCurrency(aggregateMultiCounterTotal.discount)}</span>
                 </div>
               </div>
 
@@ -2666,7 +2987,7 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   <span className="text-[10px] text-emerald-200 font-medium">Final customer billing amount</span>
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight mt-2">
-                  {formatCurrency(calculation.finalTotal)}
+                  {formatCurrency(aggregateMultiCounterTotal.finalGrandTotal)}
                 </div>
               </div>
             </div>
@@ -2726,35 +3047,35 @@ export default function EstimateBuilder({ projectToEdit, onSaveSuccess }) {
                   ))}
                 </tbody>
                 <tfoot className="bg-slate-50 border-t-2 border-slate-300 divide-y divide-slate-200 text-xs">
-                  {calculation.gstAmount > 0 && (
+                  {aggregateMultiCounterTotal.gstAmount > 0 && (
                     <tr>
                       <td colSpan={4} className="py-2 px-3 text-right font-semibold text-slate-700">
-                        GST ({calculation.gstPercent}%)
+                        GST ({aggregateMultiCounterTotal.gstPercent}%)
                       </td>
                       <td className="py-2 px-3 text-right font-black font-mono text-slate-900">
-                        {formatCurrency(calculation.gstAmount)}
+                        {formatCurrency(aggregateMultiCounterTotal.gstAmount)}
                       </td>
                     </tr>
                   )}
-                  {calculation.discount > 0 && (
+                  {aggregateMultiCounterTotal.discount > 0 && (
                     <tr>
                       <td colSpan={4} className="py-2 px-3 text-right font-semibold text-rose-600">
                         Discount (₹)
                       </td>
                       <td className="py-2 px-3 text-right font-black font-mono text-rose-600">
-                        - {formatCurrency(calculation.discount)}
+                        - {formatCurrency(aggregateMultiCounterTotal.discount)}
                       </td>
                     </tr>
                   )}
                   <tr className="bg-slate-900 text-white font-bold">
                     <td colSpan={2} className="py-3 px-3 text-left font-bold text-[11px] text-slate-300">
-                      Total Quantity: <span className="text-white font-black">{quotationBillItems.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)}</span>
+                      Total Quantity: <span className="text-white font-black">{aggregateMultiCounterTotal.totalUnits}</span>
                     </td>
                     <td colSpan={2} className="py-3 px-3 text-right uppercase tracking-wider font-black">
                       GRAND TOTAL
                     </td>
                     <td className="py-3 px-3 text-right font-black font-mono text-sm text-emerald-400">
-                      {formatCurrency(calculation.finalTotal)}
+                      {formatCurrency(aggregateMultiCounterTotal.finalGrandTotal)}
                     </td>
                   </tr>
                 </tfoot>
